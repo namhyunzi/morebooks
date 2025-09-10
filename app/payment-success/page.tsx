@@ -5,16 +5,16 @@ import { CheckCircle } from "lucide-react"
 import Link from "next/link"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { getOrder, updateOrderStatus, Order } from "@/lib/firebase-realtime"
 import { toast } from "sonner"
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const searchParams = useSearchParams()
-  const orderId = searchParams.get('orderId')
+  const orderId = searchParams?.get('orderId')
 
   useEffect(() => {
     if (orderId) {
@@ -141,5 +141,20 @@ export default function PaymentSuccessPage() {
       </main>
       <Footer />
     </div>
+  )
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#A2B38B] mx-auto"></div>
+          <p className="mt-4 text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+      </div>
+    }>
+      <PaymentSuccessContent />
+    </Suspense>
   )
 }

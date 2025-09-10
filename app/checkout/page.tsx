@@ -9,20 +9,21 @@ import Header from "@/components/header"
 import Footer from "@/components/footer"
 import { ChevronUp, HelpCircle, Smartphone, MapPin } from "lucide-react"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { getCartItems, clearCart, processBankTransferOrder, CartItem } from "@/lib/firebase-realtime"
 import { getBookById, Book } from "@/lib/demo-books"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 interface CartItemWithBook extends CartItem {
   book: Book
 }
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const { user, updateCartCount } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [cartItems, setCartItems] = useState<CartItemWithBook[]>([])
   const [loading, setLoading] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer")
@@ -53,13 +54,14 @@ export default function CheckoutPage() {
     loadCartItems()
     
     // 앱에서 돌아온 데이터 확인
-    checkAppReturnData()
-  }, [user, router])
+    if (searchParams) {
+      checkAppReturnData(searchParams)
+    }
+  }, [user, router, searchParams])
 
-  const checkAppReturnData = () => {
+  const checkAppReturnData = (searchParams: URLSearchParams) => {
     // URL 파라미터에서 앱 데이터 확인
-    const urlParams = new URLSearchParams(window.location.search)
-    const appData = urlParams.get('appData')
+    const appData = searchParams.get('appData')
     
     if (appData) {
       try {
@@ -145,24 +147,9 @@ export default function CheckoutPage() {
       zipCode: '우편번호'
     }
 
-    // 현재 입력된 정보
-    const currentData = {
-      name: customerInfo.name || '',
-      email: `${customerInfo.emailId}@${customerInfo.emailDomain}`,
-      phone: `${customerInfo.phonePrefix}-${customerInfo.phoneNumber}`,
-      address: customerInfo.address || '',
-      detailAddress: customerInfo.detailAddress || '',
-      zipCode: customerInfo.postalCode || ''
-    }
-
-    // 부족한 정보 목록
-    const missingFields = Object.keys(requiredFields).filter(field => !currentData[field])
-
     // 앱에 전달할 정보
     const checkoutData = {
       requiredFields,
-      currentData,
-      missingFields,
       returnUrl: window.location.href, // 쇼핑몰로 돌아올 URL
       action: 'checkout' // 액션 타입
     }
@@ -267,7 +254,7 @@ export default function CheckoutPage() {
         toast.success('주문이 완료되었습니다!')
         router.push(`/payment-success?orderId=${result.orderId}`)
       } else {
-        toast.error(result.error || '주문 처리에 실패했습니다.')
+        toast.error(typeof result.error === 'string' ? result.error : '주문 처리에 실패했습니다.')
       }
     } catch (error) {
       console.error('주문 처리 에러:', error)
@@ -628,5 +615,20 @@ export default function CheckoutPage() {
       </main>
       <Footer />
     </div>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#A2B38B] mx-auto"></div>
+          <p className="mt-4 text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+      </div>
+    }>
+      <CheckoutContent />
+    </Suspense>
   )
 }
