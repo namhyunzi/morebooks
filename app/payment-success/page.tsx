@@ -1,10 +1,77 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { CheckCircle } from "lucide-react"
 import Link from "next/link"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { getOrder, updateOrderStatus, Order } from "@/lib/firebase-realtime"
+import { toast } from "sonner"
 
 export default function PaymentSuccessPage() {
+  const [order, setOrder] = useState<Order | null>(null)
+  const [loading, setLoading] = useState(true)
+  const searchParams = useSearchParams()
+  const orderId = searchParams.get('orderId')
+
+  useEffect(() => {
+    if (orderId) {
+      loadOrder()
+    } else {
+      setLoading(false)
+    }
+  }, [orderId])
+
+  const loadOrder = async () => {
+    if (!orderId) return
+
+    try {
+      const orderData = await getOrder(orderId)
+      if (orderData) {
+        setOrder(orderData)
+        // 무통장입금은 이미 주문과 동시에 결제완료 처리됨
+        if (orderData.paymentMethod === 'bank_transfer' && orderData.paymentStatus === 'completed') {
+          toast.success('주문이 완료되었습니다!')
+        }
+      }
+    } catch (error) {
+      console.error('주문 정보 로딩 에러:', error)
+      toast.error('주문 정보를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#A2B38B] mx-auto"></div>
+          <p className="mt-4 text-gray-600">주문 정보를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!order) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-8 max-w-6xl">
+          <div className="text-center py-16">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">주문 정보를 찾을 수 없습니다</h2>
+            <p className="text-gray-600 mb-8">잘못된 주문번호이거나 주문이 존재하지 않습니다</p>
+            <Button asChild className="bg-[#A2B38B] hover:bg-[#8fa076]">
+              <Link href="/">홈으로 돌아가기</Link>
+            </Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -24,35 +91,43 @@ export default function PaymentSuccessPage() {
           <CheckCircle className="w-16 h-16 text-[#A2B38B] mx-auto mb-6" />
 
           <h2 className="text-2xl font-bold mb-2">주문이 완료되었습니다!</h2>
-          <p className="text-gray-600 mb-8">주문번호: 20191113934554</p>
+          <p className="text-gray-600 mb-8">주문번호: {order.id}</p>
           <p className="text-gray-600 mb-8">
-            아래 가상계좌로 입금해 주시면 정상적으로
-            <br />
-            결제 완료처리가 됩니다
+            {order.paymentMethod === 'bank_transfer' ? (
+              <>
+                무통장입금으로 주문이 완료되었습니다.
+                <br />
+                아래 계좌 정보를 확인해주세요.
+              </>
+            ) : (
+              '결제가 완료되었습니다.'
+            )}
           </p>
 
-          <div className="bg-gray-50 rounded-lg p-6 mb-8">
-            <h3 className="font-bold text-lg mb-4">가상계좌 정보</h3>
+          {order.paymentMethod === 'bank_transfer' && order.bankAccount && (
+            <div className="bg-gray-50 rounded-lg p-6 mb-8">
+              <h3 className="font-bold text-lg mb-4">입금 계좌 정보</h3>
 
-            <div className="space-y-3 text-left">
-              <div className="flex justify-between">
-                <span className="text-gray-600">계좌 정보</span>
-                <span className="font-medium">국민은행 60519014678208</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">예금주</span>
-                <span className="font-medium">주식회사 아임웹</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">결제금액</span>
-                <span className="font-bold text-[#A2B38B]">4,000원</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">입금 기간</span>
-                <span className="font-medium">2019-11-13 17:19까지</span>
+              <div className="space-y-3 text-left">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">계좌 정보</span>
+                  <span className="font-medium">{order.bankAccount.bankName} {order.bankAccount.accountNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">예금주</span>
+                  <span className="font-medium">{order.bankAccount.accountHolder}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">결제금액</span>
+                  <span className="font-bold text-[#A2B38B]">{order.totalAmount.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">주문 상태</span>
+                  <span className="font-medium text-[#A2B38B]">결제완료</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="flex space-x-4 justify-center">
             <Button variant="outline" asChild>

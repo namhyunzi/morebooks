@@ -3,63 +3,76 @@
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { Trash2, Plus, Minus, Gift, Users } from "lucide-react"
+import { Trash2, Plus, Minus, Gift, Users, ShoppingCart } from "lucide-react"
 import Link from "next/link"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useAuth } from "@/contexts/AuthContext"
+import { getCartItems, updateCartItemQuantity, removeFromCart, clearCart, CartItem } from "@/lib/firebase-realtime"
+import { getBookById, Book } from "@/lib/demo-books"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
-const cartItems = [
-  {
-    id: 1,
-    title: "[국내도서] 가난한 찰리의 연감",
-    originalPrice: 33000,
-    price: 29700,
-    discount: 10,
-    points: 1650,
-    quantity: 1,
-    image: "/warren-buffett-and-charlie-munger-book-cover.jpg",
-  },
-  {
-    id: 2,
-    title: "[예약][국내도서] 머니 트렌드 2026",
-    originalPrice: 26000,
-    price: 23400,
-    discount: 10,
-    points: 1300,
-    quantity: 1,
-    image: "/psychology-of-money-book-cover.jpg",
-  },
-  {
-    id: 3,
-    title: "[국내도서] 하루 한 장 나의 어휘력을 위한 필사 노트",
-    originalPrice: 23800,
-    price: 21420,
-    discount: 10,
-    points: 1190,
-    quantity: 1,
-    image: "/placeholder-kb35r.png",
-  },
-]
+interface CartItemWithBook extends CartItem {
+  book: Book
+}
 
 export default function CartPage() {
-  const [selectedItems, setSelectedItems] = useState<number[]>([1, 2, 3])
-  const [quantities, setQuantities] = useState<{[key: number]: number}>({
-    1: 1,
-    2: 1,
-    3: 1,
-  })
+  const { user, updateCartCount } = useAuth()
+  const router = useRouter()
+  const [cartItems, setCartItems] = useState<CartItemWithBook[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedItems, setSelectedItems] = useState<string[]>([])
+  const [quantities, setQuantities] = useState<{[key: string]: number}>({})
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    loadCartItems()
+  }, [user, router])
+
+  const loadCartItems = async () => {
+    if (!user) return
+
+    try {
+      const items = await getCartItems(user.uid)
+      const itemsWithBooks: CartItemWithBook[] = []
+      
+      for (const item of items) {
+        const book = getBookById(item.bookId)
+        if (book) {
+          itemsWithBooks.push({ ...item, book })
+        }
+      }
+      
+      setCartItems(itemsWithBooks)
+      setSelectedItems(itemsWithBooks.map(item => item.id))
+      setQuantities(itemsWithBooks.reduce((acc, item) => {
+        acc[item.id] = item.quantity
+        return acc
+      }, {} as {[key: string]: number}))
+    } catch (error) {
+      console.error('장바구니 로딩 에러:', error)
+      toast.error('장바구니를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const totalAmount = cartItems.reduce((sum, item) => {
     if (selectedItems.includes(item.id)) {
-      return sum + item.price * quantities[item.id]
+      return sum + item.book.discountPrice * quantities[item.id]
     }
     return sum
   }, 0)
 
   const totalOriginalAmount = cartItems.reduce((sum, item) => {
     if (selectedItems.includes(item.id)) {
-      return sum + item.originalPrice * quantities[item.id]
+      return sum + item.book.price * quantities[item.id]
     }
     return sum
   }, 0)
@@ -75,7 +88,7 @@ export default function CartPage() {
 
   const totalPoints = cartItems.reduce((sum, item) => {
     if (selectedItems.includes(item.id)) {
-      return sum + item.points * quantities[item.id]
+      return sum + Math.floor(item.book.discountPrice * 0.05) * quantities[item.id]
     }
     return sum
   }, 0)
@@ -88,7 +101,7 @@ export default function CartPage() {
     }
   }
 
-  const handleSelectItem = (itemId: number, checked: boolean) => {
+  const handleSelectItem = (itemId: string, checked: boolean) => {
     if (checked) {
       setSelectedItems([...selectedItems, itemId])
     } else {
@@ -96,27 +109,96 @@ export default function CartPage() {
     }
   }
 
-  const handleQuantityChange = (itemId: number, change: number) => {
+  const handleQuantityChange = async (itemId: string, change: number) => {
+    if (!user) return
+
     const newQuantity = Math.max(1, quantities[itemId] + change)
     setQuantities({...quantities, [itemId]: newQuantity})
+    
+    const result = await updateCartItemQuantity(user.uid, itemId, newQuantity)
+    if (!result.success) {
+      toast.error('수량 변경에 실패했습니다.')
+      // 원래 수량으로 되돌리기
+      setQuantities({...quantities, [itemId]: quantities[itemId]})
+    } else {
+      // 헤더의 장바구니 수량 업데이트
+      await updateCartCount()
+    }
   }
 
-  const handleRemoveItem = (itemId: number) => {
-    setSelectedItems(selectedItems.filter(id => id !== itemId))
+  const handleRemoveItem = async (itemId: string) => {
+    if (!user) return
+
+    const result = await removeFromCart(user.uid, itemId)
+    if (result.success) {
+      setCartItems(cartItems.filter(item => item.id !== itemId))
+      setSelectedItems(selectedItems.filter(id => id !== itemId))
+      // 헤더의 장바구니 수량 업데이트
+      await updateCartCount()
+      toast.success('상품이 삭제되었습니다.')
+    } else {
+      toast.error('상품 삭제에 실패했습니다.')
+    }
   }
 
-  const handleRemoveAll = () => {
-    setSelectedItems([])
+  const handleRemoveAll = async () => {
+    if (!user) return
+
+    const result = await clearCart(user.uid)
+    if (result.success) {
+      setCartItems([])
+      setSelectedItems([])
+      // 헤더의 장바구니 수량 업데이트
+      await updateCartCount()
+      toast.success('장바구니가 비워졌습니다.')
+    } else {
+      toast.error('장바구니 비우기에 실패했습니다.')
+    }
   }
 
   const isAllSelected = selectedItems.length === cartItems.length
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#A2B38B] mx-auto"></div>
+          <p className="mt-4 text-gray-600">장바구니를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <main className="container mx-auto px-4 py-8 max-w-6xl flex-1">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold">장바구니 (0)</h1>
+          </div>
+          <div className="text-center py-16">
+            <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ShoppingCart className="w-12 h-12 text-gray-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">장바구니가 비어있습니다</h2>
+            <p className="text-gray-600 mb-8">원하는 상품을 장바구니에 담아보세요</p>
+            <Button asChild className="bg-[#A2B38B] hover:bg-[#8fa076]">
+              <Link href="/">쇼핑 계속하기</Link>
+            </Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+      <main className="container mx-auto px-4 py-8 max-w-6xl flex-1">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">장바구니 ({cartItems.length})</h1>
+          <h1 className="text-2xl font-bold">장바구니 ({selectedItems.length})</h1>
         </div>
 
         {/* Progress Steps */}
@@ -172,20 +254,21 @@ export default function CartPage() {
                     onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
                   />
                   <img
-                    src={item.image || "/placeholder.svg"}
-                    alt={item.title}
+                    src={item.book.image || "/placeholder.svg"}
+                    alt={item.book.title}
                     className="w-16 h-20 object-cover rounded"
                   />
                   <div className="flex-1">
-                    <h3 className="font-medium text-sm mb-2">{item.title}</h3>
+                    <h3 className="font-medium text-sm mb-2">{item.book.title}</h3>
+                    <p className="text-xs text-gray-500 mb-2">{item.book.author}</p>
                     <div className="flex items-center space-x-2 mb-2">
-                      <span className="text-[#A2B38B] text-sm font-bold">{item.discount}%</span>
-                      <span className="text-lg font-bold">{item.price.toLocaleString()}원</span>
-                      <span className="text-sm text-gray-500 line-through">{item.originalPrice.toLocaleString()}원</span>
+                      <span className="text-[#A2B38B] text-sm font-bold">{item.book.discountRate}%</span>
+                      <span className="text-lg font-bold">{item.book.discountPrice.toLocaleString()}원</span>
+                      <span className="text-sm text-gray-500 line-through">{item.book.price.toLocaleString()}원</span>
                     </div>
                   </div>
                   <div className="flex flex-col items-center space-y-3 border-l border-gray-300 pl-3">
-                    <div className="text-lg font-bold">{item.price.toLocaleString()}원</div>
+                    <div className="text-lg font-bold">{(item.book.discountPrice * quantities[item.id]).toLocaleString()}원</div>
                     <div className="flex items-center border border-gray-300 rounded overflow-hidden">
                       <Button 
                         variant="ghost" 
@@ -227,6 +310,10 @@ export default function CartPage() {
               <div className="flex justify-between text-sm">
                 <span>상품 금액</span>
                 <span>{totalOriginalAmount.toLocaleString()}원</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>할인 금액</span>
+                <span className="text-red-500">-{totalDiscount.toLocaleString()}원</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>배송비</span>

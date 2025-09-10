@@ -1,10 +1,221 @@
+'use client'
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import Header from "@/components/header"
+import { useAuth } from "@/contexts/AuthContext"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import TermsAgreementModal from "@/components/terms-agreement-modal"
 
 export default function LoginPage() {
+  const { login, loginWithGoogleWithTerms, deleteUserAccount, checkSignInMethods } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [showTermsModal, setShowTermsModal] = useState(false)
+  const [pendingGoogleUser, setPendingGoogleUser] = useState<any>(null)
+  const router = useRouter()
+
+  const validateEmail = (email: string) => {
+    if (!email.trim()) {
+      return '필수 입력 항목입니다.'
+    }
+    // 다중 도메인 지원 이메일 유효성 검사: user@domain.com 또는 user@subdomain.domain.com
+    const emailRegex = /^[a-zA-Z0-9]+@[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)+$/
+    if (!emailRegex.test(email)) {
+      return '이메일 형식이 올바르지 않습니다.'
+    }
+    return ''
+  }
+
+  const checkEmailProvider = async (email: string) => {
+    if (!email || validateEmail(email)) {
+      return // 이메일이 없거나 형식이 잘못되면 확인하지 않음
+    }
+
+    try {
+      const { isGoogleOnly } = await checkSignInMethods(email)
+      
+      if (isGoogleOnly) {
+        setEmailError('구글로 가입된 계정입니다. \'구글\' 버튼을 눌러 로그인해주세요.')
+      } else {
+        setEmailError('')
+      }
+    } catch (error) {
+      // 에러 발생 시 무시 (네트워크 문제 등)
+      console.error('이메일 확인 중 오류:', error)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setEmailError('')
+
+    // 유효성 검사
+    const emailErr = validateEmail(email)
+    if (emailErr) {
+      setEmailError(emailErr)
+      setLoading(false)
+      return
+    }
+
+    try {
+      // 이미 이메일 필드에서 구글 계정 에러가 표시되었다면 로그인 시도하지 않음
+      if (emailError && emailError.includes('구글로 가입된 계정입니다')) {
+        setLoading(false)
+        return
+      }
+
+      await login(email, password)
+      router.push('/')
+    } catch (error: any) {
+      console.error('로그인 에러:', error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      // 구글 로그인 팝업 열기
+      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth')
+      const { auth } = await import('@/lib/firebase')
+      
+      const provider = new GoogleAuthProvider()
+      const userCredential = await signInWithPopup(auth, provider)
+      
+      // 기존 사용자인지 확인 (약관동의 정보가 있는지 확인)
+      const hasExistingAgreements = await checkUserAgreements(userCredential.user.uid)
+      
+      if (hasExistingAgreements) {
+        // 기존 사용자 - 바로 로그인
+        router.push('/')
+      } else {
+        // 신규 사용자 - 약관동의 모달 표시
+        setPendingGoogleUser(userCredential)
+        setShowTermsModal(true)
+      }
+      
+    } catch (error: any) {
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const checkUserAgreements = async (userId: string) => {
+    try {
+      const { ref, get } = await import('firebase/database')
+      const { realtimeDb } = await import('@/lib/firebase')
+      
+      const agreementsRef = ref(realtimeDb, `users/${userId}/agreements`)
+      const snapshot = await get(agreementsRef)
+      
+      return snapshot.exists()
+    } catch (error) {
+      console.error('약관동의 확인 실패:', error)
+      return false
+    }
+  }
+
+  const handleTermsAgree = async (agreements: {
+    termsAccepted: boolean
+    privacyAccepted: boolean
+    marketingAccepted: boolean
+  }) => {
+    if (!pendingGoogleUser) return
+
+    try {
+      setLoading(true)
+      
+      // 약관동의 정보를 Realtime Database에 저장
+      await saveUserAgreements(pendingGoogleUser.user.uid, pendingGoogleUser.user.email || '', agreements)
+      
+      // 모달 닫기
+      setShowTermsModal(false)
+      setPendingGoogleUser(null)
+      
+      // 메인 페이지로 이동
+      router.push('/')
+      
+    } catch (error: any) {
+      setError(error.message)
+      // 에러 발생 시 계정 삭제
+      try {
+        await deleteUserAccount()
+      } catch (deleteError) {
+        console.error('계정 삭제 실패:', deleteError)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleTermsCancel = async () => {
+    if (pendingGoogleUser) {
+      try {
+        // 계정 삭제
+        await deleteUserAccount()
+      } catch (error) {
+        console.error('계정 삭제 실패:', error)
+      }
+    }
+    
+    setShowTermsModal(false)
+    setPendingGoogleUser(null)
+  }
+
+  const saveUserAgreements = async (userId: string, email: string, agreements: {
+    termsAccepted: boolean
+    privacyAccepted: boolean
+    marketingAccepted: boolean
+  }) => {
+    try {
+      const { ref, set, serverTimestamp } = await import('firebase/database')
+      const { realtimeDb } = await import('@/lib/firebase')
+      
+      // 사용자 기본 정보 저장
+      await set(ref(realtimeDb, `users/${userId}/profile`), {
+        email: email,
+        createdAt: serverTimestamp()
+      })
+      
+      // 약관동의 정보 저장
+      const agreementsData: any = {
+        termsAccepted: agreements.termsAccepted,
+        privacyAccepted: agreements.privacyAccepted,
+        marketingAccepted: agreements.marketingAccepted
+      }
+      
+      // 동의한 약관에만 타임스탬프 추가
+      if (agreements.termsAccepted) {
+        agreementsData.termsAcceptedAt = serverTimestamp()
+      }
+      if (agreements.privacyAccepted) {
+        agreementsData.privacyAcceptedAt = serverTimestamp()
+      }
+      if (agreements.marketingAccepted) {
+        agreementsData.marketingAcceptedAt = serverTimestamp()
+      }
+      
+      await set(ref(realtimeDb, `users/${userId}/agreements`), agreementsData)
+      console.log('약관동의 정보 저장 완료:', agreementsData)
+    } catch (error) {
+      console.error('약관동의 정보 저장 실패:', error)
+      throw error
+    }
+  }
   return (
     <div className="min-h-screen bg-gray-100">
       <Header />
@@ -14,7 +225,13 @@ export default function LoginPage() {
             <h1 className="text-2xl font-bold text-gray-900 mb-2">로그인</h1>
           </div>
 
-          <form className="space-y-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <Label htmlFor="email" className="text-gray-700 font-medium">
                 이메일
@@ -23,8 +240,36 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 placeholder="이메일을 입력하세요"
-                className="mt-1 border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  if (emailError) {
+                    const basicError = validateEmail(e.target.value)
+                    if (basicError) {
+                      setEmailError(basicError)
+                    } else {
+                      setEmailError('') // 기본 에러 클리어
+                    }
+                  }
+                }}
+                onBlur={async () => {
+                  const basicError = validateEmail(email)
+                  if (basicError) {
+                    setEmailError(basicError)
+                  } else {
+                    // 기본 유효성 검사 통과 시 구글 계정 확인
+                    await checkEmailProvider(email)
+                  }
+                }}
+                className={`mt-1 focus:border-[#A2B38B] focus:ring-[#A2B38B] ${
+                  emailError ? 'border-red-500' : 'border-gray-300'
+                }`}
+                required
+                disabled={loading}
               />
+              {emailError && (
+                <p className="text-red-500 text-sm mt-1">{emailError}</p>
+              )}
             </div>
 
             <div>
@@ -35,12 +280,20 @@ export default function LoginPage() {
                 id="password"
                 type="password"
                 placeholder="비밀번호를 입력하세요"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]"
+                required
+                disabled={loading}
               />
             </div>
 
-            <Button type="submit" className="w-full bg-[#A2B38B] hover:bg-[#8fa076] text-white">
-              로그인
+            <Button 
+              type="submit" 
+              className="w-full bg-[#A2B38B] hover:bg-[#8fa076] text-white"
+              disabled={loading}
+            >
+              {loading ? '로그인 중...' : '로그인'}
             </Button>
 
             <div className="relative mb-6">
@@ -52,7 +305,13 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button type="button" variant="outline" className="w-full border-gray-300 hover:bg-gray-50 bg-transparent">
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full border-gray-300 hover:bg-gray-50 bg-transparent"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+            >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
@@ -87,6 +346,15 @@ export default function LoginPage() {
           <p className="text-center mt-6 text-sm text-gray-600">로그인에 문제가 있으신가요?</p>
         </div>
       </main>
+
+      {/* 약관동의 모달 */}
+      <TermsAgreementModal
+        isOpen={showTermsModal}
+        onClose={handleTermsCancel}
+        onAgree={handleTermsAgree}
+        userName={pendingGoogleUser?.user?.displayName || (pendingGoogleUser?.user?.email ? pendingGoogleUser.user.email.split('@')[0] : '')}
+        isNewUser={false}
+      />
     </div>
   )
 }

@@ -10,7 +10,7 @@ import { getAnalytics } from "firebase/analytics";
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyC2daQEUxLHo0qYTdYKKclRmpLXXuMnRgI",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "morebooks-49f1d.firebaseapp.com",
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://morebooks-49f1d-default-rtdb.firebaseio.com",
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://morebooks-49f1d-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "morebooks-49f1d",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "morebooks-49f1d.firebasestorage.app",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "796042693305",

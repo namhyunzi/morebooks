@@ -1,9 +1,12 @@
+'use client'
+
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Package } from "lucide-react"
 import Link from "next/link"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
+import { useAuth } from "@/contexts/AuthContext"
 
 const orderHistory = [
   {
@@ -33,6 +36,24 @@ const orderHistory = [
 ]
 
 export default function MyPage() {
+  const { user } = useAuth()
+  
+  // 사용자 이름 가져오기 (구글: displayName, 이메일: 이메일 아이디 부분)
+  const getUserName = () => {
+    if (user?.displayName) {
+      return user.displayName
+    } else if (user?.email) {
+      return user.email.split('@')[0]
+    }
+    return '사용자'
+  }
+  
+  // 사용자 이름의 첫 글자 (아바타용)
+  const getUserInitial = () => {
+    const name = getUserName()
+    return name.charAt(0).toUpperCase()
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -43,12 +64,15 @@ export default function MyPage() {
             <div className="bg-primary rounded-lg p-6 text-primary-foreground mb-6">
               <div className="flex items-center space-x-4 mb-4">
                 <div className="w-16 h-16 bg-primary-foreground rounded-full flex items-center justify-center">
-                  <span className="text-primary font-bold text-lg">남</span>
+                  <span className="text-primary font-bold text-2xl">{getUserInitial()}</span>
                 </div>
                 <div>
-                  <h3 className="font-bold">남현지님</h3>
-                  <Badge variant="secondary" className="mt-1">
-                    F 포인트 {">"}
+                  <h3 className="font-bold text-lg">{getUserName()}님</h3>
+                  <Badge variant="secondary" className="mt-1 flex items-center gap-1">
+                    <div className="w-4 h-4 bg-[#A2B38B] rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">C</span>
+                    </div>
+                    포인트 {">"}
                   </Badge>
                 </div>
               </div>

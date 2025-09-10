@@ -2,16 +2,100 @@
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Star, Minus, Plus } from "lucide-react"
+import { Star, Minus, Plus, ShoppingCart } from "lucide-react"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { getBookById, Book } from "@/lib/demo-books"
+import { addToCart } from "@/lib/firebase-realtime"
+import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
+import CartPopup from "@/components/cart-popup"
 
 export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1)
+  const [book, setBook] = useState<Book | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showCartPopup, setShowCartPopup] = useState(false)
+  const { user, updateCartCount } = useAuth()
+  const params = useParams()
+  const router = useRouter()
+
+  useEffect(() => {
+    const bookId = params.id as string
+    const foundBook = getBookById(bookId)
+    if (foundBook) {
+      setBook(foundBook)
+    } else {
+      router.push('/')
+    }
+    setLoading(false)
+  }, [params.id, router])
 
   const handleQuantityChange = (change: number) => {
     setQuantity(Math.max(1, quantity + change))
+  }
+
+  const handleAddToCart = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      router.push('/login')
+      return
+    }
+
+    if (!book) return
+
+    const result = await addToCart(user.uid, book.id, quantity)
+    if (result.success) {
+      // 헤더의 장바구니 수량 업데이트
+      await updateCartCount()
+      setShowCartPopup(true)
+    } else {
+      toast.error('장바구니 추가에 실패했습니다.')
+    }
+  }
+
+  const handleBuyNow = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      router.push('/login')
+      return
+    }
+
+    if (!book) return
+
+    // 장바구니에 추가 후 바로 구매 페이지로 이동
+    const result = await addToCart(user.uid, book.id, quantity)
+    if (result.success) {
+      router.push('/checkout')
+    } else {
+      toast.error('구매 진행에 실패했습니다.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#A2B38B] mx-auto"></div>
+          <p className="mt-4 text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!book) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">상품을 찾을 수 없습니다</h1>
+          <Button onClick={() => router.push('/')} className="bg-[#A2B38B] hover:bg-[#8fa076]">
+            홈으로 돌아가기
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -23,17 +107,20 @@ export default function ProductDetailPage() {
           <div className="flex items-start justify-between mb-6">
             <div className="space-y-4">
               <Badge variant="secondary" className="bg-[#E4E9BE] text-[#A2B38B]">
-                베스트셀러
+                {book.category}
               </Badge>
-              <h1 className="text-3xl font-bold text-gray-900">워런 버핏과 찰리 멍거</h1>
-              <p className="text-gray-600">저자: 워런 버핏, 찰리 멍거 | 출판사: 교보문고 | 출간일: 2024.01.15</p>
+              <h1 className="text-3xl font-bold text-gray-900">{book.title}</h1>
+              <p className="text-gray-600">저자: {book.author} | 출판사: {book.publisher} | 출간일: {book.publishDate}</p>
               <div className="flex items-center space-x-2">
                 <div className="flex items-center">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    <Star 
+                      key={i} 
+                      className={`w-4 h-4 ${i < Math.floor(book.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+                    />
                   ))}
                 </div>
-                <span className="text-sm text-gray-500">(4.8) 리뷰 1,234개</span>
+                <span className="text-sm text-gray-500">({book.rating}) 리뷰 {book.reviewCount.toLocaleString()}개</span>
               </div>
             </div>
             <Button variant="ghost" size="sm">
@@ -49,7 +136,7 @@ export default function ProductDetailPage() {
           {/* Left Section - Product Image */}
           <div className="flex flex-col">
             <div className="aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden">
-              <img src="/abstract-book-cover.png" alt="상품 이미지" className="w-full h-full object-cover" />
+              <img src={book.image} alt={book.title} className="w-full h-full object-cover" />
             </div>
           </div>
 
@@ -63,7 +150,7 @@ export default function ProductDetailPage() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span>적립금</span>
-                  <span className="text-[#A2B38B] font-medium">1,000원 (5% 적립)</span>
+                  <span className="text-[#A2B38B] font-medium">{Math.floor(book.discountPrice * 0.05).toLocaleString()}원 (5% 적립)</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>무료배송</span>
@@ -119,11 +206,11 @@ export default function ProductDetailPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-lg">정가</span>
-                      <span className="text-lg line-through text-gray-500">25,000원</span>
+                      <span className="text-lg line-through text-gray-500">{book.price.toLocaleString()}원</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-lg font-bold">판매가</span>
-                      <span className="text-2xl font-bold text-[#A2B38B]">22,500원</span>
+                      <span className="text-2xl font-bold text-[#A2B38B]">{book.discountPrice.toLocaleString()}원</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-500">배송비</span>
@@ -147,14 +234,24 @@ export default function ProductDetailPage() {
 
                     <div className="text-right mb-6">
                       <span className="text-sm text-gray-500">총 상품금액: </span>
-                      <span className="text-xl font-bold text-[#A2B38B]">{(22500 * quantity).toLocaleString()}원</span>
+                      <span className="text-xl font-bold text-[#A2B38B]">{(book.discountPrice * quantity).toLocaleString()}원</span>
                     </div>
 
                     <div className="flex space-x-4">
-                      <Button variant="outline" className="flex-1 border-[#A2B38B] text-[#A2B38B] hover:bg-[#A2B38B] hover:text-white" size="lg">
+                      <Button 
+                        variant="outline" 
+                        className="flex-1 border-[#A2B38B] text-[#A2B38B] hover:bg-[#A2B38B] hover:text-white" 
+                        size="lg"
+                        onClick={handleAddToCart}
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-2" />
                         장바구니
                       </Button>
-                      <Button className="flex-1 bg-[#A2B38B] hover:bg-[#8fa076] text-white" size="lg">
+                      <Button 
+                        className="flex-1 bg-[#A2B38B] hover:bg-[#8fa076] text-white" 
+                        size="lg"
+                        onClick={handleBuyNow}
+                      >
                         바로구매
                       </Button>
                     </div>
@@ -174,19 +271,7 @@ export default function ProductDetailPage() {
               <section>
                 <h3 className="text-xl font-semibold text-[#A2B38B] mb-4">책 소개</h3>
                 <div className="prose max-w-none text-gray-700 leading-relaxed space-y-4">
-                  <p>
-                    투자의 전설 워런 버핏과 찰리 멍거의 투자 철학과 인생 이야기를 담은 책입니다. 50년 넘게 함께해온 두
-                    거장의 지혜와 통찰을 통해 성공적인 투자와 인생의 비밀을 배워보세요.
-                  </p>
-                  <p>
-                    이 책은 버크셔 해서웨이의 성공 스토리를 통해 장기 투자의 중요성과 가치 투자의 핵심 원칙들을 상세히
-                    다룹니다. 두 투자 거장이 수십 년간 축적한 경험과 노하우를 통해 독자들은 올바른 투자 마인드셋을 기를
-                    수 있습니다.
-                  </p>
-                  <p>
-                    특히 이번 개정판에서는 최근 10년간의 투자 사례와 시장 변화에 대한 두 거장의 새로운 통찰이 추가되어
-                    더욱 풍부한 내용을 담고 있습니다.
-                  </p>
+                  <p>{book.description}</p>
                 </div>
               </section>
 
@@ -195,19 +280,10 @@ export default function ProductDetailPage() {
                 <div className="bg-gray-50 p-6 rounded-lg">
                   <div className="space-y-4">
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-2">워런 버핏 (Warren Buffett)</h4>
+                      <h4 className="font-semibold text-gray-900 mb-2">{book.author}</h4>
                       <p className="text-gray-700">
-                        세계 최고의 투자자로 불리는 워런 버핏은 1930년 네브래스카주 오마하에서 태어났습니다. 버크셔
-                        해서웨이의 회장 겸 CEO로서 50년 넘게 연평균 20%가 넘는 수익률을 기록하며 '오마하의 현인'이라는
-                        별명을 얻었습니다.
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-2">찰리 멍거 (Charlie Munger)</h4>
-                      <p className="text-gray-700">
-                        워런 버핏의 오랜 동반자이자 버크셔 해서웨이의 부회장인 찰리 멍거는 1924년 네브래스카주에서
-                        태어났습니다. 법학과 투자 분야에서 뛰어난 성과를 거둔 그는 버핏과 함께 가치 투자의 새로운 지평을
-                        열었습니다.
+                        {book.author}은(는) {book.category} 분야의 저명한 작가입니다. 
+                        이 책을 통해 독자들에게 깊이 있는 통찰과 지식을 전달하고 있습니다.
                       </p>
                     </div>
                   </div>
@@ -318,6 +394,12 @@ export default function ProductDetailPage() {
         </div>
       </main>
       <Footer />
+      
+      {/* 장바구니 팝업 */}
+      <CartPopup 
+        isOpen={showCartPopup} 
+        onClose={() => setShowCartPopup(false)} 
+      />
     </div>
   )
 }

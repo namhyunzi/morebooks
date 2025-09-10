@@ -6,27 +6,31 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Header from "@/components/header"
+import Footer from "@/components/footer"
 import { ChevronUp, HelpCircle, Smartphone, MapPin } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useAuth } from "@/contexts/AuthContext"
+import { getCartItems, clearCart, processBankTransferOrder, CartItem } from "@/lib/firebase-realtime"
+import { getBookById, Book } from "@/lib/demo-books"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
-const orderItems = [
-  {
-    id: 1,
-    title: "[국내도서] 가난한 찰리의 연감",
-    originalPrice: 33000,
-    price: 29700,
-    quantity: 1,
-    image: "/warren-buffett-and-charlie-munger-book-cover.jpg",
-  },
-]
+interface CartItemWithBook extends CartItem {
+  book: Book
+}
 
 export default function CheckoutPage() {
-  const [paymentMethod, setPaymentMethod] = useState("")
+  const { user, updateCartCount } = useAuth()
+  const router = useRouter()
+  const [cartItems, setCartItems] = useState<CartItemWithBook[]>([])
+  const [loading, setLoading] = useState(true)
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer")
   const [selectedCard, setSelectedCard] = useState("")
   const [selectedBank, setSelectedBank] = useState("")
   const [depositorName, setDepositorName] = useState("")
   const [isOrderItemsExpanded, setIsOrderItemsExpanded] = useState(true)
+  const [processing, setProcessing] = useState(false)
   
   // 주문자 정보 상태
   const [customerInfo, setCustomerInfo] = useState({
@@ -39,19 +43,273 @@ export default function CheckoutPage() {
     address: "",
     detailAddress: ""
   })
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    loadCartItems()
+    
+    // 앱에서 돌아온 데이터 확인
+    checkAppReturnData()
+  }, [user, router])
+
+  const checkAppReturnData = () => {
+    // URL 파라미터에서 앱 데이터 확인
+    const urlParams = new URLSearchParams(window.location.search)
+    const appData = urlParams.get('appData')
+    
+    if (appData) {
+      try {
+        const userData = JSON.parse(decodeURIComponent(appData))
+        console.log('앱에서 받은 데이터:', userData)
+        
+        // 폼에 자동 입력
+        setCustomerInfo({
+          name: userData.name || '',
+          emailId: userData.email ? userData.email.split('@')[0] : '',
+          emailDomain: userData.email ? userData.email.split('@')[1] : 'naver.com',
+          phonePrefix: userData.phone ? userData.phone.split('-')[0] : '010',
+          phoneNumber: userData.phone ? userData.phone.split('-').slice(1).join('-') : '',
+          postalCode: userData.zipCode || '',
+          address: userData.address || '',
+          detailAddress: userData.detailAddress || ''
+        })
+        
+        // URL에서 파라미터 제거
+        window.history.replaceState({}, document.title, window.location.pathname)
+        
+        alert('앱에서 정보를 가져왔습니다!')
+      } catch (error) {
+        console.error('앱 데이터 파싱 오류:', error)
+      }
+    }
+  }
+
+  const loadCartItems = async () => {
+    if (!user) return
+
+    try {
+      const items = await getCartItems(user.uid)
+      const itemsWithBooks: CartItemWithBook[] = []
+      
+      for (const item of items) {
+        const book = getBookById(item.bookId)
+        if (book) {
+          itemsWithBooks.push({ ...item, book })
+        }
+      }
+      
+      setCartItems(itemsWithBooks)
+      
+      // 사용자 정보 자동 입력
+      if (user.displayName) {
+        setCustomerInfo(prev => ({ ...prev, name: user.displayName! }))
+      } else if (user.email) {
+        const emailParts = user.email.split('@')
+        setCustomerInfo(prev => ({ 
+          ...prev, 
+          name: emailParts[0],
+          emailId: emailParts[0],
+          emailDomain: emailParts[1] || "naver.com"
+        }))
+      }
+    } catch (error) {
+      console.error('장바구니 로딩 에러:', error)
+      toast.error('장바구니를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
   
-  const totalAmount = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0)
+  const totalAmount = cartItems.reduce((sum, item) => sum + item.book.discountPrice * item.quantity, 0)
+  const totalOriginalAmount = cartItems.reduce((sum, item) => sum + item.book.price * item.quantity, 0)
+  const totalDiscount = totalOriginalAmount - totalAmount
+  const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0)
 
   const handleAddressSearch = () => {
     // 우편번호 API 연동 로직
     console.log("주소찾기 클릭")
   }
 
+  const handleAppDownload = async () => {
+    // 쇼핑몰에서 요구하는 필수 정보 목록
+    const requiredFields = {
+      name: '이름',
+      email: '이메일', 
+      phone: '전화번호',
+      address: '주소',
+      detailAddress: '상세주소',
+      zipCode: '우편번호'
+    }
+
+    // 현재 입력된 정보
+    const currentData = {
+      name: customerInfo.name || '',
+      email: `${customerInfo.emailId}@${customerInfo.emailDomain}`,
+      phone: `${customerInfo.phonePrefix}-${customerInfo.phoneNumber}`,
+      address: customerInfo.address || '',
+      detailAddress: customerInfo.detailAddress || '',
+      zipCode: customerInfo.postalCode || ''
+    }
+
+    // 부족한 정보 목록
+    const missingFields = Object.keys(requiredFields).filter(field => !currentData[field])
+
+    // 앱에 전달할 정보
+    const checkoutData = {
+      requiredFields,
+      currentData,
+      missingFields,
+      returnUrl: window.location.href, // 쇼핑몰로 돌아올 URL
+      action: 'checkout' // 액션 타입
+    }
+
+    try {
+      // POST 요청으로 JSON 데이터 전달
+      const response = await fetch('https://ssmd-smoky.vercel.app/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(checkoutData)
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('앱에서 응답:', result)
+        
+        // 앱에서 처리된 결과에 따라 처리
+        if (result.success) {
+          // 앱으로 이동
+          const popup = window.open('https://ssmd-smoky.vercel.app/', '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes')
+          
+          if (!popup) {
+            alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+            return
+          }
+        } else {
+          alert('앱 연결에 실패했습니다: ' + result.error)
+        }
+      } else {
+        throw new Error('서버 응답 오류: ' + response.status)
+      }
+    } catch (error) {
+      console.error('앱 연결 실패:', error)
+      alert('앱을 연결할 수 없습니다. 잠시 후 다시 시도해주세요.')
+    }
+  }
+
+  const handleOrder = async () => {
+    console.log('주문하기 버튼 클릭됨')
+    console.log('user:', user)
+    console.log('customerInfo:', customerInfo)
+    console.log('selectedBank:', selectedBank)
+    console.log('depositorName:', depositorName)
+    
+    if (!user) {
+      console.log('사용자가 로그인되지 않음')
+      return
+    }
+
+    // 필수 정보 검증
+    if (!customerInfo.name || !customerInfo.phoneNumber || !customerInfo.address) {
+      console.log('필수 정보 누락:', { name: customerInfo.name, phone: customerInfo.phoneNumber, address: customerInfo.address })
+      alert('필수 정보를 모두 입력해주세요.\n\n- 이름\n- 전화번호\n- 주소')
+      return
+    }
+
+    if (!selectedBank || !depositorName) {
+      console.log('무통장입금 정보 누락:', { selectedBank, depositorName })
+      alert('무통장입금 정보를 입력해주세요.\n\n- 은행 선택\n- 입금자 성명')
+      return
+    }
+
+    setProcessing(true)
+
+    try {
+      // 주문 데이터 생성
+      const orderData = {
+        userId: user.uid,
+        items: cartItems.map(item => ({
+          bookId: item.bookId,
+          title: item.book.title,
+          author: item.book.author,
+          price: item.book.price,
+          discountPrice: item.book.discountPrice,
+          quantity: item.quantity,
+          image: item.book.image
+        })),
+        totalAmount,
+        status: 'paid' as const, // 무통장입금은 주문과 동시에 결제완료
+        paymentMethod: 'bank_transfer' as const,
+        paymentStatus: 'completed' as const, // 결제완료 상태
+        shippingAddress: {
+          name: customerInfo.name,
+          phone: `${customerInfo.phonePrefix}-${customerInfo.phoneNumber}`,
+          address: customerInfo.address,
+          detailAddress: customerInfo.detailAddress,
+          zipCode: customerInfo.postalCode
+        }
+      }
+
+      // 무통장입금 주문 처리 (주문과 동시에 결제완료)
+      const result = await processBankTransferOrder(orderData, selectedBank, depositorName)
+      
+      if (result.success) {
+        // 장바구니 비우기
+        await clearCart(user.uid)
+        // 헤더의 장바구니 수량 업데이트
+        await updateCartCount()
+        
+        toast.success('주문이 완료되었습니다!')
+        router.push(`/payment-success?orderId=${result.orderId}`)
+      } else {
+        toast.error(result.error || '주문 처리에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('주문 처리 에러:', error)
+      toast.error('주문 처리 중 오류가 발생했습니다.')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#A2B38B] mx-auto"></div>
+          <p className="mt-4 text-gray-600">주문 정보를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <main className="container mx-auto px-4 py-8 max-w-6xl flex-1">
+          <div className="text-center py-16">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">주문할 상품이 없습니다</h2>
+            <p className="text-gray-600 mb-8">장바구니에 상품을 담아주세요</p>
+            <Button asChild className="bg-[#A2B38B] hover:bg-[#8fa076]">
+              <Link href="/">쇼핑 계속하기</Link>
+            </Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+      <main className="container mx-auto px-4 py-8 max-w-6xl flex-1">
         <h1 className="text-2xl font-bold mb-8">주문/결제</h1>
 
         {/* Progress Steps */}
@@ -93,21 +351,22 @@ export default function CheckoutPage() {
                   
                   {/* Product Items */}
                   <div className="p-4">
-                    {orderItems.map((item) => (
+                    {cartItems.map((item) => (
                       <div key={item.id} className="flex items-center space-x-4">
                         <img
-                          src={item.image || "/placeholder.svg"}
-                          alt={item.title}
+                          src={item.book.image || "/placeholder.svg"}
+                          alt={item.book.title}
                           className="w-16 h-20 object-cover rounded"
                         />
                         <div className="flex-1">
-                          <h4 className="font-medium text-sm">{item.title}</h4>
+                          <h4 className="font-medium text-sm">{item.book.title}</h4>
+                          <p className="text-xs text-gray-500">{item.book.author}</p>
                         </div>
                         <div className="flex items-center justify-between w-32">
                           <span className="text-sm text-gray-600">{item.quantity}개</span>
                           <div className="text-right">
-                            <div className="font-bold text-sm">{item.price.toLocaleString()}원</div>
-                            <div className="text-xs text-gray-500 line-through">{item.originalPrice.toLocaleString()}원</div>
+                            <div className="font-bold text-sm">{item.book.discountPrice.toLocaleString()}원</div>
+                            <div className="text-xs text-gray-500 line-through">{item.book.price.toLocaleString()}원</div>
                           </div>
                         </div>
                       </div>
@@ -133,9 +392,9 @@ export default function CheckoutPage() {
                     variant="outline" 
                     size="sm"
                     className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
-                    onClick={() => window.open('https://play.google.com/store', '_blank')}
+                    onClick={handleAppDownload}
                   >
-                    앱 다운로드
+                    앱으로 정보 입력
                   </Button>
                 </div>
               </div>
@@ -337,7 +596,7 @@ export default function CheckoutPage() {
             <div className="space-y-3 mb-6">
               <div className="flex justify-between">
                 <span className="font-bold">상품 금액</span>
-                <span className="font-bold">{totalAmount.toLocaleString()}원</span>
+                <span className="font-bold">{totalOriginalAmount.toLocaleString()}원</span>
               </div>
               <div className="flex justify-between">
                 <span>배송비</span>
@@ -345,25 +604,29 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between">
                 <span className="font-bold text-[#A2B38B]">상품 할인</span>
-                <span className="font-bold text-[#A2B38B]">- {Math.round(totalAmount * 0.1).toLocaleString()}원</span>
+                <span className="font-bold text-[#A2B38B]">- {totalDiscount.toLocaleString()}원</span>
               </div>
             </div>
 
             <div className="border-t border-gray-200 pt-3 mb-6">
               <div className="flex justify-between font-bold text-lg">
                 <span>최종 결제 금액</span>
-                <span className="text-[#A2B38B]">{(totalAmount * 0.9).toLocaleString()}원</span>
+                <span className="text-[#A2B38B]">{totalAmount.toLocaleString()}원</span>
               </div>
             </div>
 
-            <Button className="w-full bg-[#A2B38B] hover:bg-[#8fa076] text-white" size="lg" asChild>
-              <Link href="/payment-success">
-                결제하기
-              </Link>
+            <Button 
+              className="w-full bg-[#A2B38B] hover:bg-[#8fa076] text-white" 
+              size="lg" 
+              onClick={handleOrder}
+              disabled={processing}
+            >
+              {processing ? '주문 처리 중...' : '주문하기'}
             </Button>
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   )
 }

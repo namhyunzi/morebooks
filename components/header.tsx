@@ -1,23 +1,55 @@
+'use client'
+
 import Link from "next/link"
-import { Search, ShoppingCart, User } from "lucide-react"
+import { Search, ShoppingCart, User, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function Header() {
+  const { user, logout, cartItemCount } = useAuth()
+
+  // 디버깅용 로그
+  console.log('Header - cartItemCount:', cartItemCount)
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error('로그아웃 오류:', error)
+    }
+  }
   return (
     <header className="bg-white">
       <div className="bg-white text-gray-600 border-b border-gray-200">
         <div className="container mx-auto px-4 py-2 max-w-6xl">
           <div className="flex items-center justify-end text-sm space-x-6">
-            <Link href="/login" className="hover:text-[#A2B38B]">
-              로그인
-            </Link>
-            <Link href="/register" className="hover:text-[#A2B38B]">
-              회원가입
-            </Link>
-            <Link href="/mypage" className="hover:text-[#A2B38B]">
-              주문/배송
-            </Link>
+            {user ? (
+              <>
+                <span className="text-[#A2B38B]">
+                  {user.displayName || (user.email ? user.email.split('@')[0] : '')}님 환영합니다
+                </span>
+                <Link href="/mypage" className="hover:text-[#A2B38B]">
+                  주문/배송
+                </Link>
+                <button 
+                  onClick={handleLogout}
+                  className="hover:text-[#A2B38B] flex items-center space-x-1"
+                >
+                  <LogOut size={14} />
+                  <span>로그아웃</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="hover:text-[#A2B38B]">
+                  로그인
+                </Link>
+                <Link href="/register" className="hover:text-[#A2B38B]">
+                  회원가입
+                </Link>
+              </>
+            )}
             <Link href="/customer-service" className="hover:text-[#A2B38B]">
               고객센터
             </Link>
@@ -56,7 +88,7 @@ export default function Header() {
             <Link href="/cart" className="relative">
               <ShoppingCart className="w-6 h-6 text-gray-700" />
               <span className="absolute -top-2 -right-2 bg-[#A2B38B] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                0
+                {cartItemCount}
               </span>
             </Link>
             <Link href="/mypage">
