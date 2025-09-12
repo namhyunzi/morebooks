@@ -3,7 +3,6 @@
  */
 
 export interface SSDMConfig {
-  apiKey: string
   baseUrl: string
 }
 
@@ -20,10 +19,10 @@ export interface SSDMResponse {
   error?: string
 }
 
-// SSDM 시스템 설정 - API Key만 필요
+// SSDM 시스템 설정 - 클라이언트용 (API Key는 서버사이드에서만 사용)
 export const SSDM_CONFIG: SSDMConfig = {
-  apiKey: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY || process.env.PRIVACY_SYSTEM_API_KEY || 'demo-api-key-12345', // 클라이언트/서버 모두 지원
-  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || process.env.PRIVACY_SYSTEM_BASE_URL || 'https://ssdm-demo.vercel.app', // 클라이언트/서버 모두 지원
+  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || 'https://ssdm-demo.vercel.app', // 클라이언트용
+  // apiKey는 서버사이드에서만 사용
 }
 
 /**
@@ -35,11 +34,9 @@ export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string 
   
   console.log('SSDM 설정 확인:', {
     baseUrl,
-    apiKey: SSDM_CONFIG.apiKey ? '설정됨' : '없음',
     shopId,
     mallId,
-    'NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL': process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL,
-    'PRIVACY_SYSTEM_BASE_URL': process.env.PRIVACY_SYSTEM_BASE_URL
+    'NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL': process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL
   })
   
   if (!baseUrl || baseUrl === 'https://ssdm-demo.vercel.app') {
@@ -57,46 +54,28 @@ export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string 
 /**
  * 쇼핑몰에서 SSDM으로 사용자 연결 (팝업 또는 새창)
  */
-export async function connectToSSDM(shopId: string, mallId: string): Promise<Window | null> {
-  try {
-    console.log('SSDM 연결 시도:', { shopId, mallId })
-    
-    // API 라우트를 통해 SSDM 연결 URL 가져오기
-    const response = await fetch('/api/connect-ssdm', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ shopId, mallId })
-    })
-    
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || 'SSDM 연결에 실패했습니다.')
-    }
-    
-    const data = await response.json()
-    const connectionUrl = data.ssdmUrl
-    
-    // 팝업으로 SSDM 페이지 열기
-    const popup = window.open(
-      connectionUrl,
-      'ssdm_consent',
-      'width=600,height=800,scrollbars=yes,resizable=yes'
-    )
-    
-    if (!popup) {
-      alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
-      return null
-    }
-    
-    console.log('SSDM 연결 페이지 열림:', connectionUrl)
-    return popup
-  } catch (error) {
-    console.error('▶▶ SSDM 연결 실패:', error)
-    alert(`SSDM 연결 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+export function connectToSSDM(shopId: string, mallId: string): Window | null {
+  const params: SSDMConnectionParams = {
+    shopId,
+    mallId
+  }
+  
+  const connectionUrl = generateSSDMConnectionUrl(params)
+  
+  // 팝업으로 SSDM 페이지 열기
+  const popup = window.open(
+    connectionUrl,
+    'ssdm_consent',
+    'width=600,height=800,scrollbars=yes,resizable=yes'
+  )
+  
+  if (!popup) {
+    alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
     return null
   }
+  
+  console.log('SSDM 연결 페이지 열림:', connectionUrl)
+  return popup
 }
 
 /**
