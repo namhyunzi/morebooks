@@ -55,64 +55,23 @@ if (!getApps().length) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json()
-    console.log('API 요청 받음:', email)
+    const { email, action, sessionType, requiredFields } = await request.json()
+    console.log('API 요청 받음:', { email, action, sessionType, requiredFields })
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
-    try {
-      // Firebase Admin SDK로 사용자 조회
-      const auth = getAuth()
-      const userRecord = await auth.getUserByEmail(email)
-      
-      console.log('사용자 정보:', {
-        uid: userRecord.uid,
-        email: userRecord.email,
-        providers: userRecord.providerData.map(p => ({
-          providerId: p.providerId,
-          uid: p.uid,
-          email: p.email
-        }))
-      })
-
-      // providerData에서 제공업체 확인
-      const signInMethods = userRecord.providerData.map(provider => provider.providerId)
-      console.log('프로바이더 데이터:', signInMethods)
-      
-      // 구글만으로 가입된 계정인지 확인 (password 프로바이더가 없고 google.com만 있는 경우)
-      const hasGoogleProvider = signInMethods.includes('google.com')
-      const hasPasswordProvider = signInMethods.includes('password')
-      const isGoogleOnly = hasGoogleProvider && !hasPasswordProvider
-      
-      console.log('프로바이더 분석:', {
-        hasGoogleProvider,
-        hasPasswordProvider,
-        isGoogleOnly,
-        allProviders: signInMethods
-      })
-      
-      return NextResponse.json({
-        signInMethods,
-        isGoogleOnly,
-        registered: true,
-        providers: userRecord.providerData
-      })
-
-    } catch (adminError: any) {
-      console.log('Admin SDK 에러:', adminError.code)
-      
-      if (adminError.code === 'auth/user-not-found') {
-        // 등록되지 않은 사용자
-        return NextResponse.json({
-          signInMethods: [],
-          isGoogleOnly: false,
-          registered: false
-        })
-      } else {
-        throw adminError
-      }
+    // action에 따라 다른 처리
+    switch (action) {
+      case 'check_user':
+        return await checkFirebaseUser(email)
+      case 'request_uid_jwt':
+        return await requestUidAndJwt(email, sessionType || 'paper')
+      case 'validate_consent':
+        return await validateUserConsent(email, requiredFields || [])
+      default:
+        return await checkFirebaseUser(email) // 기본값은 기존 동작
     }
 
   } catch (error) {
@@ -121,6 +80,154 @@ export async function POST(request: NextRequest) {
       error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       signInMethods: [],
       isGoogleOnly: false
+    }, { status: 500 })
+  }
+}
+
+// 기존 Firebase Auth 사용자 확인 함수
+async function checkFirebaseUser(email: string) {
+  try {
+    // Firebase Admin SDK로 사용자 조회
+    const auth = getAuth()
+    const userRecord = await auth.getUserByEmail(email)
+    
+    console.log('사용자 정보:', {
+      uid: userRecord.uid,
+      email: userRecord.email,
+      providers: userRecord.providerData.map(p => ({
+        providerId: p.providerId,
+        uid: p.uid,
+        email: p.email
+      }))
+    })
+
+    // providerData에서 제공업체 확인
+    const signInMethods = userRecord.providerData.map(provider => provider.providerId)
+    console.log('프로바이더 데이터:', signInMethods)
+    
+    // 구글만으로 가입된 계정인지 확인 (password 프로바이더가 없고 google.com만 있는 경우)
+    const hasGoogleProvider = signInMethods.includes('google.com')
+    const hasPasswordProvider = signInMethods.includes('password')
+    const isGoogleOnly = hasGoogleProvider && !hasPasswordProvider
+    
+    console.log('프로바이더 분석:', {
+      hasGoogleProvider,
+      hasPasswordProvider,
+      isGoogleOnly,
+      allProviders: signInMethods
+    })
+    
+    return NextResponse.json({
+      signInMethods,
+      isGoogleOnly,
+      registered: true,
+      providers: userRecord.providerData
+    })
+
+  } catch (adminError: any) {
+    console.log('Admin SDK 에러:', adminError.code)
+    
+    if (adminError.code === 'auth/user-not-found') {
+      // 등록되지 않은 사용자
+      return NextResponse.json({
+        signInMethods: [],
+        isGoogleOnly: false,
+        registered: false
+      })
+    } else {
+      throw adminError
+    }
+  }
+}
+
+// UID 요청 및 JWT 발급 함수
+async function requestUidAndJwt(email: string, sessionType: 'paper' | 'qr') {
+  try {
+    // 1. Firebase Auth 사용자 확인
+    const auth = getAuth()
+    const userRecord = await auth.getUserByEmail(email)
+    
+    if (!userRecord) {
+      return NextResponse.json({ 
+        error: '등록되지 않은 사용자입니다' 
+      }, { status: 404 })
+    }
+
+    const userId = userRecord.uid
+
+    // 2. 개인정보 시스템에 UID 요청
+    const { PrivacySystemClient } = await import('@/lib/privacy-config')
+    const privacyClient = new PrivacySystemClient()
+    
+    const uidResult = await privacyClient.generateUID(userId)
+    console.log('UID 생성 결과:', uidResult)
+
+    // 3. JWT 발급 요청
+    const jwtResult = await privacyClient.issueJWT(uidResult.uid, sessionType)
+    console.log('JWT 발급 결과:', jwtResult)
+
+    return NextResponse.json({
+      success: true,
+      uid: uidResult.uid,
+      jwt: jwtResult.jwt,
+      sessionType,
+      expiresIn: jwtResult.expiresIn,
+      userInfo: {
+        email: userRecord.email,
+        uid: userRecord.uid
+      }
+    })
+
+  } catch (error) {
+    console.error('UID/JWT 요청 실패:', error)
+    return NextResponse.json({ 
+      error: 'UID/JWT 요청 중 오류가 발생했습니다',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
+}
+
+// 사용자 동의 확인 함수
+async function validateUserConsent(email: string, requiredFields: string[]) {
+  try {
+    // 1. Firebase Auth 사용자 확인
+    const auth = getAuth()
+    const userRecord = await auth.getUserByEmail(email)
+    
+    if (!userRecord) {
+      return NextResponse.json({ 
+        error: '등록되지 않은 사용자입니다' 
+      }, { status: 404 })
+    }
+
+    // 2. UID 생성 (mallId_userId 형태)
+    const mallId = 'bookstore' // 우리 쇼핑몰 ID
+    const uid = `${mallId}_${userRecord.uid}`
+
+    // 3. 개인정보 시스템에 동의 확인
+    const { PrivacySystemClient } = await import('@/lib/privacy-config')
+    const privacyClient = new PrivacySystemClient()
+    
+    const consentResult = await privacyClient.validateConsent(uid, requiredFields)
+    console.log('동의 확인 결과:', consentResult)
+
+    return NextResponse.json({
+      success: true,
+      uid,
+      consentStatus: consentResult.consentStatus,
+      allowedFields: consentResult.allowedFields,
+      expiresAt: consentResult.expiresAt,
+      userInfo: {
+        email: userRecord.email,
+        uid: userRecord.uid
+      }
+    })
+
+  } catch (error) {
+    console.error('동의 확인 실패:', error)
+    return NextResponse.json({ 
+      error: '동의 확인 중 오류가 발생했습니다',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }
 }

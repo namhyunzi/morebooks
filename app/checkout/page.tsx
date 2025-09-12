@@ -15,13 +15,24 @@ import { getCartItems, clearCart, processBankTransferOrder, CartItem } from "@/l
 import { getBookById, Book } from "@/lib/demo-books"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
+import { 
+  connectToSSDM, 
+  handleSSDMResult, 
+  validateSSDMJWT, 
+  sendJWTToDeliveryService, 
+  getSSDMErrorMessage,
+  SSDMResponse 
+} from "@/lib/ssdm-api"
 
 interface CartItemWithBook extends CartItem {
   book: Book
 }
 
 function CheckoutContent() {
-  const { user, updateCartCount } = useAuth()
+  const { 
+    user, 
+    updateCartCount
+  } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [cartItems, setCartItems] = useState<CartItemWithBook[]>([])
@@ -32,6 +43,12 @@ function CheckoutContent() {
   const [depositorName, setDepositorName] = useState("")
   const [isOrderItemsExpanded, setIsOrderItemsExpanded] = useState(true)
   const [processing, setProcessing] = useState(false)
+  
+  // SSDM 관련 상태
+  const [ssdmJWT, setSSMDJWT] = useState<string | null>(null)
+  const [ssdmUID, setSSMDUID] = useState<string | null>(null)
+  const [ssdmConnected, setSSMDConnected] = useState(false)
+  
   
   // 주문자 정보 상태
   const [customerInfo, setCustomerInfo] = useState({
@@ -56,6 +73,8 @@ function CheckoutContent() {
     // 앱에서 돌아온 데이터 확인
     if (searchParams) {
       checkAppReturnData(searchParams)
+      // SSDM에서 돌아온 데이터 확인
+      checkSSMDReturnData(searchParams)
     }
   }, [user, router, searchParams])
 
@@ -88,6 +107,36 @@ function CheckoutContent() {
         console.error('앱 데이터 파싱 오류:', error)
       }
     }
+  }
+
+  const checkSSMDReturnData = (searchParams: URLSearchParams) => {
+    handleSSDMResult(
+      searchParams,
+        (response: SSDMResponse) => {
+        // 성공 시 처리
+        if (response.jwt && response.uid) {
+          setSSMDJWT(response.jwt)
+          setSSMDUID(response.uid)
+          setSSMDConnected(true)
+          
+          toast.success(`개인정보 보호 시스템 연결 완료! (${response.expiresIn}초간 유효)`)
+          
+          // JWT 검증
+          validateSSDMJWT(response.jwt).then(isValid => {
+            if (isValid) {
+              console.log('JWT 검증 성공')
+            } else {
+              console.warn('JWT 검증 실패')
+            }
+          })
+        }
+      },
+      (error: string) => {
+        // 실패 시 처리
+        toast.error(getSSDMErrorMessage(error))
+        console.error('SSDM 연결 실패:', error)
+      }
+    )
   }
 
   const loadCartItems = async () => {
@@ -136,88 +185,57 @@ function CheckoutContent() {
     console.log("주소찾기 클릭")
   }
 
-  const handleAppDownload = async () => {
-    // 쇼핑몰에서 요구하는 필수 정보 목록
-    const requiredFields = {
-      name: '이름',
-      email: '이메일', 
-      phone: '전화번호',
-      address: '주소',
-      detailAddress: '상세주소',
-      zipCode: '우편번호'
-    }
-
-    // 앱에 전달할 정보
-    const checkoutData = {
-      requiredFields,
-      returnUrl: window.location.href, // 쇼핑몰로 돌아올 URL
-      action: 'checkout' // 액션 타입
+  const handleSSMDConnect = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
     }
 
     try {
-      // POST 요청으로 JSON 데이터 전달
-      const response = await fetch('https://ssmd-smoky.vercel.app/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(checkoutData)
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        console.log('앱에서 응답:', result)
-        
-        // 앱에서 처리된 결과에 따라 처리
-        if (result.success) {
-          // 앱으로 이동
-          const popup = window.open('https://ssmd-smoky.vercel.app/', '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes')
-          
-          if (!popup) {
-            alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
-            return
-          }
-        } else {
-          alert('앱 연결에 실패했습니다: ' + result.error)
-        }
-      } else {
-        throw new Error('서버 응답 오류: ' + response.status)
+      console.log('SSDM 개인정보 보호 시스템 연결 시작...')
+      
+      // 현재 페이지 URL을 returnUrl로 사용
+      const returnUrl = window.location.href
+      
+      // SSDM 연결 (사용자 ID는 Firebase UID 사용)
+      const popup = connectToSSDM(user.uid, returnUrl)
+      
+      if (!popup) {
+        return // 팝업 차단됨 (connectToSSDM에서 알림 처리)
       }
+      
+      toast.info('개인정보 보호 시스템으로 이동했습니다. 팝업에서 동의를 진행해주세요.')
     } catch (error) {
-      console.error('앱 연결 실패:', error)
-      alert('앱을 연결할 수 없습니다. 잠시 후 다시 시도해주세요.')
+      console.error('SSDM 연결 실패:', error)
+      toast.error('개인정보 보호 시스템 연결에 실패했습니다.')
     }
   }
 
+  const handleAppDownload = async () => {
+    // 기존 앱 다운로드 함수 (호환성 유지)
+    await handleSSMDConnect()
+  }
+
+
   const handleOrder = async () => {
-    console.log('주문하기 버튼 클릭됨')
-    console.log('user:', user)
-    console.log('customerInfo:', customerInfo)
-    console.log('selectedBank:', selectedBank)
-    console.log('depositorName:', depositorName)
-    
     if (!user) {
-      console.log('사용자가 로그인되지 않음')
       return
     }
 
     // 필수 정보 검증
     if (!customerInfo.name || !customerInfo.phoneNumber || !customerInfo.address) {
-      console.log('필수 정보 누락:', { name: customerInfo.name, phone: customerInfo.phoneNumber, address: customerInfo.address })
       alert('필수 정보를 모두 입력해주세요.\n\n- 이름\n- 전화번호\n- 주소')
       return
     }
 
     if (!selectedBank || !depositorName) {
-      console.log('무통장입금 정보 누락:', { selectedBank, depositorName })
       alert('무통장입금 정보를 입력해주세요.\n\n- 은행 선택\n- 입금자 성명')
       return
     }
 
-    setProcessing(true)
-
     try {
-      // 주문 데이터 생성
+      setProcessing(true)
+
       const orderData = {
         userId: user.uid,
         items: cartItems.map(item => ({
@@ -230,22 +248,37 @@ function CheckoutContent() {
           image: item.book.image
         })),
         totalAmount,
-        status: 'paid' as const, // 무통장입금은 주문과 동시에 결제완료
+        status: 'paid' as const,
         paymentMethod: 'bank_transfer' as const,
-        paymentStatus: 'completed' as const, // 결제완료 상태
+        paymentStatus: 'completed' as const,
         shippingAddress: {
           name: customerInfo.name,
           phone: `${customerInfo.phonePrefix}-${customerInfo.phoneNumber}`,
           address: customerInfo.address,
           detailAddress: customerInfo.detailAddress,
           zipCode: customerInfo.postalCode
-        }
+        },
+        shippingFee: 3000,
+        finalAmount: totalAmount + 3000
       }
 
-      // 무통장입금 주문 처리 (주문과 동시에 결제완료)
+      // 주문 처리
       const result = await processBankTransferOrder(orderData, selectedBank, depositorName)
       
       if (result.success) {
+        // SSDM JWT가 있으면 택배사에 전달
+        if (ssdmJWT && result.orderId) {
+          try {
+            const deliveryAuthSuccess = await sendJWTToDeliveryService(ssdmJWT, result.orderId)
+            if (deliveryAuthSuccess) {
+              toast.success('개인정보 보호 시스템을 통한 안전한 배송이 설정되었습니다!')
+            }
+          } catch (error) {
+            console.error('택배사 JWT 전달 실패:', error)
+            // 실패해도 주문은 계속 진행
+          }
+        }
+        
         // 장바구니 비우기
         await clearCart(user.uid)
         // 헤더의 장바구니 수량 업데이트
@@ -367,22 +400,42 @@ function CheckoutContent() {
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <h3 className="font-bold text-lg mb-6">주문자 정보</h3>
               
-              {/* 앱 사용 유도 배너 */}
-              <div className="bg-gradient-to-r from-[#A2B38B] to-[#8fa076] rounded-lg p-4 mb-6 text-white">
+              {/* SSDM 연결 배너 */}
+              <div className={`rounded-lg p-4 mb-6 text-white transition-colors ${
+                ssdmConnected 
+                  ? 'bg-gradient-to-r from-green-500 to-green-600' 
+                  : 'bg-gradient-to-r from-[#A2B38B] to-[#8fa076]'
+              }`}>
                 <div className="flex items-center space-x-3">
                   <Smartphone className="w-6 h-6" />
                   <div className="flex-1">
-                    <h4 className="font-semibold text-sm">개인정보 보호 앱을 통해 안전하게 주문하세요!</h4>
-                    <p className="text-xs opacity-90 mt-1">직접 입력 없이 개인정보를 보호하며 주문할 수 있습니다.</p>
+                    {ssdmConnected ? (
+                      <>
+                        <h4 className="font-semibold text-sm">개인정보 보호 시스템 연결 완료!</h4>
+                        <p className="text-xs opacity-90 mt-1">안전한 배송을 위해 택배사에 임시 권한이 부여됩니다.</p>
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="font-semibold text-sm">개인정보 보호 시스템으로 안전하게 주문하세요!</h4>
+                        <p className="text-xs opacity-90 mt-1">직접 입력 없이 개인정보를 보호하며 주문할 수 있습니다.</p>
+                      </>
+                    )}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
-                    onClick={handleAppDownload}
-                  >
-                    앱으로 정보 입력
-                  </Button>
+                  {!ssdmConnected && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
+                      onClick={handleSSMDConnect}
+                    >
+                      안전한 배송 설정
+                    </Button>
+                  )}
+                  {ssdmConnected && (
+                    <div className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded">
+                      연결됨
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -614,6 +667,7 @@ function CheckoutContent() {
         </div>
       </main>
       <Footer />
+      
     </div>
   )
 }

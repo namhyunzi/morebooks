@@ -20,11 +20,17 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+import { PRIVACY_CONFIG } from '@/lib/privacy-config'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   cartItemCount: number
+  // 개인정보 시스템 연동 정보
+  privacyUID: string | null
+  privacyJWT: string | null
+  consentStatus: 'none' | 'pending' | 'allowed' | 'denied'
+  
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<any>
   logout: () => Promise<void>
@@ -38,6 +44,11 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>
   checkSignInMethods: (email: string) => Promise<{ signInMethods: string[], isGoogleOnly: boolean, registered: boolean }>
   updateCartCount: () => Promise<void>
+  
+  // 개인정보 시스템 연동 함수들
+  requestPrivacyUIDAndJWT: (sessionType?: 'paper' | 'qr') => Promise<{ uid: string, jwt: string }>
+  requestUserInfo: (requiredFields: string[]) => Promise<any>
+  requestUserConsent: (requiredFields: string[], duration: 'once' | 'always') => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -54,6 +65,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [cartItemCount, setCartItemCount] = useState(0)
+  
+  // 개인정보 시스템 연동 상태
+  const [privacyUID, setPrivacyUID] = useState<string | null>(null)
+  const [privacyJWT, setPrivacyJWT] = useState<string | null>(null)
+  const [consentStatus, setConsentStatus] = useState<'none' | 'pending' | 'allowed' | 'denied'>('none')
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -111,6 +127,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signOut(auth)
       setCartItemCount(0)
+      // 개인정보 시스템 연동 정보 초기화
+      setPrivacyUID(null)
+      setPrivacyJWT(null)
+      setConsentStatus('none')
     } catch (error: any) {
       throw new Error('로그아웃 중 오류가 발생했습니다')
     }
@@ -276,10 +296,101 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const requestPrivacyUIDAndJWT = async (sessionType: 'paper' | 'qr' = 'paper'): Promise<{ uid: string, jwt: string }> => {
+    try {
+      const { PrivacySystemClient } = await import('@/lib/privacy-config')
+      const client = new PrivacySystemClient()
+      
+      // 1. UID 생성
+      const uidResult = await client.generateUID(user!.uid)
+      setPrivacyUID(uidResult.uid)
+      
+      // 2. JWT 발급
+      const jwtResult = await client.issueJWT(uidResult.uid, sessionType)
+      setPrivacyJWT(jwtResult.jwt)
+      
+      return { uid: uidResult.uid, jwt: jwtResult.jwt }
+    } catch (error) {
+      console.error('UID/JWT 요청 실패:', error)
+      throw error
+    }
+  }
+
+  // 새로운 함수: 개인정보 요청
+  const requestUserInfo = async (requiredFields: string[]) => {
+    try {
+      if (!privacyJWT) {
+        throw new Error('JWT 토큰이 없습니다.')
+      }
+      
+      const { PrivacySystemClient } = await import('@/lib/privacy-config')
+      const client = new PrivacySystemClient()
+      const result = await client.requestUserInfo(privacyJWT, requiredFields)
+      
+      // SSDM에서 제공하는 추가 정보 활용
+      console.log('세션 타입:', result.sessionType)
+      console.log('허용된 필드:', result.allowedFields)
+      console.log('만료 시간:', result.expiresAt)
+      console.log('기능:', result.capabilities)
+      
+      return result // { viewerUrl, sessionId, allowedFields, ... }
+    } catch (error) {
+      console.error('개인정보 요청 실패:', error)
+      throw error
+    }
+  }
+
+  // 동의 관련 함수는 /api/consent 사용
+  const requestUserConsent = async (requiredFields: string[], duration: 'once' | 'always'): Promise<boolean> => {
+    try {
+      if (!privacyUID) {
+        throw new Error('UID가 없습니다.')
+      }
+      
+      // 팝업으로 동의 페이지 열기
+      const consentUrl = `${PRIVACY_CONFIG.baseUrl}/consent?uid=${privacyUID}&fields=${requiredFields.join(',')}`
+      const popup = window.open(consentUrl, 'consent', 'width=600,height=800')
+      
+      // 팝업 결과 대기
+      return new Promise((resolve) => {
+        const handleMessage = (event: any) => {
+          // SSDM의 baseUrl과 정확히 일치하는지 확인
+          if (event.origin !== PRIVACY_CONFIG.baseUrl) return
+          
+          if (event.data.type === 'consent_result') {
+            popup?.close()
+            window.removeEventListener('message', handleMessage)
+            resolve(event.data.agreed)
+          }
+        }
+        
+        window.addEventListener('message', handleMessage)
+        
+        // 팝업이 닫혔는지 확인 (사용자가 X 버튼으로 닫은 경우)
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed)
+            window.removeEventListener('message', handleMessage)
+            resolve(false) // 거부로 처리
+          }
+        }, 1000)
+      })
+    } catch (error) {
+      console.error('동의 요청 실패:', error)
+      throw error
+    }
+  }
+
+
   const value = {
     user,
     loading,
     cartItemCount,
+    // 개인정보 시스템 연동 상태
+    privacyUID,
+    privacyJWT,
+    consentStatus,
+    
     login,
     register,
     logout,
@@ -288,7 +399,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     deleteUserAccount,
     resetPassword,
     checkSignInMethods,
-    updateCartCount
+    updateCartCount,
+    
+    // 개인정보 시스템 연동 함수들
+    requestPrivacyUIDAndJWT,
+    requestUserInfo,
+    requestUserConsent
   }
 
   return (

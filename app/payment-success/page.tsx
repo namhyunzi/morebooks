@@ -9,10 +9,12 @@ import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { getOrder, updateOrderStatus, Order } from "@/lib/firebase-realtime"
 import { toast } from "sonner"
+import { handleSSDMResult, getSSDMErrorMessage, SSDMResponse } from "@/lib/ssdm-api"
 
 function PaymentSuccessContent() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const [ssdmConnected, setSSMDConnected] = useState(false)
   const searchParams = useSearchParams()
   const orderId = searchParams?.get('orderId')
 
@@ -22,7 +24,29 @@ function PaymentSuccessContent() {
     } else {
       setLoading(false)
     }
-  }, [orderId])
+    
+    // SSDM 연결 결과 확인
+    if (searchParams) {
+      checkSSMDResult()
+    }
+  }, [orderId, searchParams])
+  
+  const checkSSMDResult = () => {
+    if (!searchParams) return
+    
+    handleSSDMResult(
+      searchParams,
+      (response: SSDMResponse) => {
+        // SSDM 연결 성공
+        setSSMDConnected(true)
+        console.log('결제 완료 페이지에서 SSDM 연결 확인:', response)
+      },
+      (error: string) => {
+        // SSDM 연결 실패 (무시 - 일반 주문으로 처리)
+        console.log('SSDM 연결 없이 일반 주문 완료:', error)
+      }
+    )
+  }
 
   const loadOrder = async () => {
     if (!orderId) return
@@ -91,7 +115,21 @@ function PaymentSuccessContent() {
           <CheckCircle className="w-16 h-16 text-[#A2B38B] mx-auto mb-6" />
 
           <h2 className="text-2xl font-bold mb-2">주문이 완료되었습니다!</h2>
-          <p className="text-gray-600 mb-8">주문번호: {order.id}</p>
+          <p className="text-gray-600 mb-4">주문번호: {order.id}</p>
+          
+          {/* SSDM 연결 상태 표시 */}
+          {ssdmConnected && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-green-800 font-medium">개인정보 보호 시스템을 통한 안전한 배송</span>
+              </div>
+              <p className="text-green-700 text-sm mt-2">
+                택배사에 임시 권한이 부여되어 개인정보를 보호하며 배송됩니다.
+              </p>
+            </div>
+          )}
+          
           <p className="text-gray-600 mb-8">
             {order.paymentMethod === 'bank_transfer' ? (
               <>
