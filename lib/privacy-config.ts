@@ -18,57 +18,56 @@ class PrivacySystemClient {
     this.apiKey = PRIVACY_CONFIG.apiKey
   }
 
-  // 1. generateUID - SSDM에서 받은 UID를 그대로 사용
+  // 1. generateUID - 내부 API 라우트를 통해 SSDM API 호출
   async generateUID(userId: string) {
-    const response = await fetch(`${this.baseUrl}/api/generate-uid`, {
+    const response = await fetch('/api/ssdm/generate-uid', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ userId })
     })
     
     if (!response.ok) {
-      throw new Error(`UID 생성 실패: ${response.status}`)
+      const errorData = await response.json()
+      throw new Error(`UID 생성 실패: ${errorData.error || response.status}`)
     }
     
     const result = await response.json()
-    // SSDM에서 받은 UID를 그대로 사용
     return { uid: result.uid }
   }
 
-  // 2. issueJWT (이미 올바름)
-  async issueJWT(uid: string, sessionType: 'paper' | 'qr') {
-    const response = await fetch(`${this.baseUrl}/api/issue-jwt`, {
+  // 2. issueJWT - 내부 API 라우트를 통해 SSDM API 호출
+  async issueJWT(uid: string) {
+    const response = await fetch('/api/ssdm/issue-jwt', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ uid, sessionType })
+      body: JSON.stringify({ uid })
     });
     
     if (!response.ok) {
-      throw new Error('JWT 발급 실패');
+      const errorData = await response.json()
+      throw new Error(`JWT 발급 실패: ${errorData.error || response.status}`);
     }
     
-    return await response.json(); // { jwt: string, expiresIn: number, sessionType: string }
+    return await response.json(); // { jwt: string, expiresIn: number }
   }
 
-  // 3. 새로운 메서드 추가: 개인정보 요청
+  // 3. 개인정보 요청 - 내부 API 라우트를 통해 SSDM API 호출
   async requestUserInfo(jwt: string, requiredFields: string[]) {
-    const response = await fetch(`${this.baseUrl}/api/request-info`, {
+    const response = await fetch('/api/ssdm/request-info', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ jwt, requiredFields })
     });
     
     if (!response.ok) {
-      throw new Error('개인정보 요청 실패');
+      const errorData = await response.json()
+      throw new Error(`개인정보 요청 실패: ${errorData.error || response.status}`);
     }
     
     return await response.json(); // { success: true, viewerUrl: string, sessionId: string, ... }

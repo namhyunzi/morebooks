@@ -55,8 +55,8 @@ if (!getApps().length) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, action, sessionType, requiredFields } = await request.json()
-    console.log('API 요청 받음:', { email, action, sessionType, requiredFields })
+    const { email, action, requiredFields } = await request.json()
+    console.log('API 요청 받음:', { email, action, requiredFields })
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       case 'check_user':
         return await checkFirebaseUser(email)
       case 'request_uid_jwt':
-        return await requestUidAndJwt(email, sessionType || 'paper')
+        return await requestUidAndJwt(email)
       case 'validate_consent':
         return await validateUserConsent(email, requiredFields || [])
       default:
@@ -141,7 +141,7 @@ async function checkFirebaseUser(email: string) {
 }
 
 // UID 요청 및 JWT 발급 함수
-async function requestUidAndJwt(email: string, sessionType: 'paper' | 'qr') {
+async function requestUidAndJwt(email: string) {
   try {
     // 1. Firebase Auth 사용자 확인
     const auth = getAuth()
@@ -172,7 +172,6 @@ async function requestUidAndJwt(email: string, sessionType: 'paper' | 'qr') {
       shopId,
       mallId,
       consentUrl,
-      sessionType,
       userInfo: {
         email: userRecord.email,
         uid: userRecord.uid

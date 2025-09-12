@@ -46,7 +46,7 @@ interface AuthContextType {
   updateCartCount: () => Promise<void>
   
   // 개인정보 시스템 연동 함수들
-  requestPrivacyUIDAndJWT: (sessionType?: 'paper' | 'qr') => Promise<{ uid: string, jwt: string }>
+  requestPrivacyUIDAndJWT: () => Promise<{ uid: string, jwt: string }>
   requestUserInfo: (requiredFields: string[]) => Promise<any>
 }
 
@@ -295,7 +295,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const requestPrivacyUIDAndJWT = async (sessionType: 'paper' | 'qr' = 'paper'): Promise<{ uid: string, jwt: string }> => {
+  const requestPrivacyUIDAndJWT = async (): Promise<{ uid: string, jwt: string }> => {
     try {
       // 이메일에서 shopId 추출 (예: user@example.com → user)
       const emailParts = user!.email?.split('@') || []
