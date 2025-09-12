@@ -27,8 +27,8 @@ export default function HomePage() {
       const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
       const mallId = PRIVACY_CONFIG.mallId
       
-      // SSDM 연결 (쿼리스트링으로 직접 연결)
-      const popup = connectToSSDM(shopId, mallId)
+      // SSDM 연결 (API 라우트를 통해 연결)
+      const popup = await connectToSSDM(shopId, mallId)
       
       if (!popup) {
         alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')

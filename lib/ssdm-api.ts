@@ -37,11 +37,13 @@ export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string 
     baseUrl,
     apiKey: SSDM_CONFIG.apiKey ? '설정됨' : '없음',
     shopId,
-    mallId
+    mallId,
+    'NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL': process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL,
+    'PRIVACY_SYSTEM_BASE_URL': process.env.PRIVACY_SYSTEM_BASE_URL
   })
   
-  if (!baseUrl) {
-    throw new Error('PRIVACY_SYSTEM_BASE_URL이 설정되지 않았습니다.')
+  if (!baseUrl || baseUrl === 'https://ssdm-demo.vercel.app') {
+    throw new Error('PRIVACY_SYSTEM_BASE_URL이 설정되지 않았습니다. .env.local 파일에 올바른 SSDM URL을 설정해주세요.')
   }
   
   const url = new URL(`${baseUrl}/consent`)
@@ -55,16 +57,26 @@ export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string 
 /**
  * 쇼핑몰에서 SSDM으로 사용자 연결 (팝업 또는 새창)
  */
-export function connectToSSDM(shopId: string, mallId: string): Window | null {
+export async function connectToSSDM(shopId: string, mallId: string): Promise<Window | null> {
   try {
-    const params: SSDMConnectionParams = {
-      shopId,
-      mallId
-    }
-    
     console.log('SSDM 연결 시도:', { shopId, mallId })
     
-    const connectionUrl = generateSSDMConnectionUrl(params)
+    // API 라우트를 통해 SSDM 연결 URL 가져오기
+    const response = await fetch('/api/connect-ssdm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ shopId, mallId })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'SSDM 연결에 실패했습니다.')
+    }
+    
+    const data = await response.json()
+    const connectionUrl = data.ssdmUrl
     
     // 팝업으로 SSDM 페이지 열기
     const popup = window.open(

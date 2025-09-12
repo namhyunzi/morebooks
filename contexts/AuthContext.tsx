@@ -303,9 +303,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
       const mallId = PRIVACY_CONFIG.mallId
       
-      // SSDM 연결 (쿼리스트링으로 직접 연결)
+      // SSDM 연결 (API 라우트를 통해 연결)
       const { connectToSSDM } = await import('@/lib/ssdm-api')
-      const popup = connectToSSDM(shopId, mallId)
+      const popup = await connectToSSDM(shopId, mallId)
       
       if (!popup) {
         throw new Error('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
