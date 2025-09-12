@@ -17,22 +17,22 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">바로가기</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/bestsellers" className="text-gray-600 hover:text-primary">
+                <Link href="/" className="text-gray-600 hover:text-primary">
                   베스트셀러
                 </Link>
               </li>
               <li>
-                <Link href="/new-books" className="text-gray-600 hover:text-primary">
+                <Link href="/" className="text-gray-600 hover:text-primary">
                   신간도서
                 </Link>
               </li>
               <li>
-                <Link href="/events" className="text-gray-600 hover:text-primary">
+                <Link href="/" className="text-gray-600 hover:text-primary">
                   이벤트
                 </Link>
               </li>
               <li>
-                <Link href="/reviews" className="text-gray-600 hover:text-primary">
+                <Link href="/" className="text-gray-600 hover:text-primary">
                   리뷰
                 </Link>
               </li>
@@ -44,22 +44,22 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">고객서비스</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/faq" className="text-gray-600 hover:text-primary">
+                <Link href="/customer-service" className="text-gray-600 hover:text-primary">
                   자주묻는질문
                 </Link>
               </li>
               <li>
-                <Link href="/notice" className="text-gray-600 hover:text-primary">
+                <Link href="/customer-service" className="text-gray-600 hover:text-primary">
                   공지사항
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-gray-600 hover:text-primary">
+                <Link href="/customer-service" className="text-gray-600 hover:text-primary">
                   1:1문의
                 </Link>
               </li>
               <li>
-                <Link href="/bulk-order" className="text-gray-600 hover:text-primary">
+                <Link href="/customer-service" className="text-gray-600 hover:text-primary">
                   대량주문
                 </Link>
               </li>

@@ -80,51 +80,51 @@ export default function MyPage() {
 
             <nav className="space-y-2">
               <div className="font-bold text-foreground mb-4">내 주문 관리</div>
-              <Link href="/mypage/orders" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage/order-history" className="block text-sm text-muted-foreground hover:text-foreground">
                 주문/배송 조회
               </Link>
-              <Link href="/mypage/returns" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage/order-history" className="block text-sm text-muted-foreground hover:text-foreground">
                 취소/반품 조회
               </Link>
 
               <div className="font-bold text-foreground mb-4 mt-8">내 서재</div>
-              <Link href="/mypage/library" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 내 서재 관리
               </Link>
-              <Link href="/mypage/recent" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 최근 본 상품
               </Link>
-              <Link href="/mypage/interests" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 내 관심분야
               </Link>
 
               <div className="font-bold text-foreground mb-4 mt-8">나의 활동</div>
-              <Link href="/mypage/reviews" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 내 작성리뷰
               </Link>
-              <Link href="/mypage/events" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 참여중인 이벤트
               </Link>
-              <Link href="/mypage/event-history" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 참여한 이벤트
               </Link>
 
               <div className="font-bold text-foreground mb-4 mt-8">고객센터</div>
-              <Link href="/mypage/inquiry" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/customer-service" className="block text-sm text-muted-foreground hover:text-foreground">
                 1:1 상담내역
               </Link>
-              <Link href="/mypage/notice" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/customer-service" className="block text-sm text-muted-foreground hover:text-foreground">
                 공지사항
               </Link>
 
               <div className="font-bold text-foreground mb-4 mt-8">내 정보 관리</div>
-              <Link href="/mypage/profile" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 회원정보 관리
               </Link>
-              <Link href="/mypage/change-password" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/new-password" className="block text-sm text-muted-foreground hover:text-foreground">
                 비밀번호 변경
               </Link>
-              <Link href="/mypage/withdraw" className="block text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/mypage" className="block text-sm text-muted-foreground hover:text-foreground">
                 회원탈퇴
               </Link>
             </nav>

@@ -22,8 +22,8 @@ export interface SSDMResponse {
 
 // SSDM 시스템 설정 - API Key만 필요
 export const SSDM_CONFIG: SSDMConfig = {
-  apiKey: process.env.PRIVACY_SYSTEM_API_KEY!, // 이것만 있으면 됨
-  baseUrl: process.env.PRIVACY_SYSTEM_BASE_URL!, // SSDM 시스템 URL
+  apiKey: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY || process.env.PRIVACY_SYSTEM_API_KEY || 'demo-api-key-12345', // 클라이언트/서버 모두 지원
+  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || process.env.PRIVACY_SYSTEM_BASE_URL || 'https://ssdm-demo.vercel.app', // 클라이언트/서버 모두 지원
 }
 
 /**
@@ -33,10 +33,22 @@ export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string 
   const { shopId, mallId } = params
   const baseUrl = SSDM_CONFIG.baseUrl
   
+  console.log('SSDM 설정 확인:', {
+    baseUrl,
+    apiKey: SSDM_CONFIG.apiKey ? '설정됨' : '없음',
+    shopId,
+    mallId
+  })
+  
+  if (!baseUrl) {
+    throw new Error('PRIVACY_SYSTEM_BASE_URL이 설정되지 않았습니다.')
+  }
+  
   const url = new URL(`${baseUrl}/consent`)
   url.searchParams.append('shopId', shopId)
   url.searchParams.append('mallId', mallId)
   
+  console.log('생성된 SSDM URL:', url.toString())
   return url.toString()
 }
 
@@ -44,27 +56,35 @@ export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string 
  * 쇼핑몰에서 SSDM으로 사용자 연결 (팝업 또는 새창)
  */
 export function connectToSSDM(shopId: string, mallId: string): Window | null {
-  const params: SSDMConnectionParams = {
-    shopId,
-    mallId
-  }
-  
-  const connectionUrl = generateSSDMConnectionUrl(params)
-  
-  // 팝업으로 SSDM 페이지 열기
-  const popup = window.open(
-    connectionUrl,
-    'ssdm_consent',
-    'width=600,height=800,scrollbars=yes,resizable=yes'
-  )
-  
-  if (!popup) {
-    alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+  try {
+    const params: SSDMConnectionParams = {
+      shopId,
+      mallId
+    }
+    
+    console.log('SSDM 연결 시도:', { shopId, mallId })
+    
+    const connectionUrl = generateSSDMConnectionUrl(params)
+    
+    // 팝업으로 SSDM 페이지 열기
+    const popup = window.open(
+      connectionUrl,
+      'ssdm_consent',
+      'width=600,height=800,scrollbars=yes,resizable=yes'
+    )
+    
+    if (!popup) {
+      alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+      return null
+    }
+    
+    console.log('SSDM 연결 페이지 열림:', connectionUrl)
+    return popup
+  } catch (error) {
+    console.error('▶▶ SSDM 연결 실패:', error)
+    alert(`SSDM 연결 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
     return null
   }
-  
-  console.log('SSDM 연결 페이지 열림:', connectionUrl)
-  return popup
 }
 
 /**

@@ -434,7 +434,7 @@ function CheckoutContent() {
                       className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
                       onClick={handleSSMDConnect}
                     >
-                      안전한 배송 설정
+                      개인정보 연결하기
                     </Button>
                   )}
                   {ssdmConnected && (

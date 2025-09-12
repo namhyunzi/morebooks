@@ -1,8 +1,8 @@
 // 개인정보 시스템 연동 설정 - API Key만 필요
 export const PRIVACY_CONFIG = {
-  baseUrl: process.env.PRIVACY_SYSTEM_BASE_URL!, // SSDM 시스템 URL
-  apiKey: process.env.PRIVACY_SYSTEM_API_KEY!, // 이것만 있으면 됨
-  mallId: process.env.MALL_ID || 'morebooks', // 쇼핑몰 ID
+  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || process.env.PRIVACY_SYSTEM_BASE_URL || 'https://ssdm-demo.vercel.app', // 클라이언트/서버 모두 지원
+  apiKey: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY || process.env.PRIVACY_SYSTEM_API_KEY || 'demo-api-key-12345', // 클라이언트/서버 모두 지원
+  mallId: process.env.NEXT_PUBLIC_MALL_ID || process.env.MALL_ID || 'morebooks', // 쇼핑몰 ID
   sessionTypes: {
     paper: { name: '종이송장', ttl: 3600 },
     qr: { name: 'QR송장', ttl: 43200 }
