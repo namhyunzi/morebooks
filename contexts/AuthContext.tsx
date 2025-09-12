@@ -48,7 +48,6 @@ interface AuthContextType {
   // 개인정보 시스템 연동 함수들
   requestPrivacyUIDAndJWT: (sessionType?: 'paper' | 'qr') => Promise<{ uid: string, jwt: string }>
   requestUserInfo: (requiredFields: string[]) => Promise<any>
-  requestUserConsent: (requiredFields: string[], duration: 'once' | 'always') => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -298,20 +297,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestPrivacyUIDAndJWT = async (sessionType: 'paper' | 'qr' = 'paper'): Promise<{ uid: string, jwt: string }> => {
     try {
-      const { PrivacySystemClient } = await import('@/lib/privacy-config')
-      const client = new PrivacySystemClient()
+      // 이메일에서 shopId 추출 (예: user@example.com → user)
+      const emailParts = user!.email?.split('@') || []
+      const shopId = emailParts[0] || user!.uid
+      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
+      const mallId = PRIVACY_CONFIG.mallId
       
-      // 1. UID 생성
-      const uidResult = await client.generateUID(user!.uid)
-      setPrivacyUID(uidResult.uid)
+      // SSDM 연결 (쿼리스트링으로 직접 연결)
+      const { connectToSSDM } = await import('@/lib/ssdm-api')
+      const popup = connectToSSDM(shopId, mallId)
       
-      // 2. JWT 발급
-      const jwtResult = await client.issueJWT(uidResult.uid, sessionType)
-      setPrivacyJWT(jwtResult.jwt)
+      if (!popup) {
+        throw new Error('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+      }
       
-      return { uid: uidResult.uid, jwt: jwtResult.jwt }
+      console.log('SSDM 연결 완료:', shopId, mallId)
+      
+      // 팝업에서 JWT를 받아오는 로직은 별도로 구현 필요
+      // 현재는 임시로 빈 값 반환
+      return { uid: shopId, jwt: '' }
     } catch (error) {
-      console.error('UID/JWT 요청 실패:', error)
+      console.error('SSDM 연결 실패:', error)
       throw error
     }
   }
@@ -340,46 +346,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  // 동의 관련 함수는 /api/consent 사용
-  const requestUserConsent = async (requiredFields: string[], duration: 'once' | 'always'): Promise<boolean> => {
-    try {
-      if (!privacyUID) {
-        throw new Error('UID가 없습니다.')
-      }
-      
-      // 팝업으로 동의 페이지 열기
-      const consentUrl = `${PRIVACY_CONFIG.baseUrl}/consent?uid=${privacyUID}&fields=${requiredFields.join(',')}`
-      const popup = window.open(consentUrl, 'consent', 'width=600,height=800')
-      
-      // 팝업 결과 대기
-      return new Promise((resolve) => {
-        const handleMessage = (event: any) => {
-          // SSDM의 baseUrl과 정확히 일치하는지 확인
-          if (event.origin !== PRIVACY_CONFIG.baseUrl) return
-          
-          if (event.data.type === 'consent_result') {
-            popup?.close()
-            window.removeEventListener('message', handleMessage)
-            resolve(event.data.agreed)
-          }
-        }
-        
-        window.addEventListener('message', handleMessage)
-        
-        // 팝업이 닫혔는지 확인 (사용자가 X 버튼으로 닫은 경우)
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed)
-            window.removeEventListener('message', handleMessage)
-            resolve(false) // 거부로 처리
-          }
-        }, 1000)
-      })
-    } catch (error) {
-      console.error('동의 요청 실패:', error)
-      throw error
-    }
-  }
 
 
   const value = {
@@ -403,8 +369,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // 개인정보 시스템 연동 함수들
     requestPrivacyUIDAndJWT,
-    requestUserInfo,
-    requestUserConsent
+    requestUserInfo
   }
 
   return (

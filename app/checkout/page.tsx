@@ -197,8 +197,14 @@ function CheckoutContent() {
       // 현재 페이지 URL을 returnUrl로 사용
       const returnUrl = window.location.href
       
-      // SSDM 연결 (사용자 ID는 Firebase UID 사용)
-      const popup = connectToSSDM(user.uid, returnUrl)
+      // 이메일에서 shopId 추출 (예: user@example.com → user)
+      const emailParts = user.email?.split('@') || []
+      const shopId = emailParts[0] || user.uid
+      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
+      const mallId = PRIVACY_CONFIG.mallId
+      
+      // SSDM 연결 (쿼리스트링으로 직접 연결)
+      const popup = connectToSSDM(shopId, mallId)
       
       if (!popup) {
         return // 팝업 차단됨 (connectToSSDM에서 알림 처리)

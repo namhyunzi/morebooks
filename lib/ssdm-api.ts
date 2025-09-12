@@ -8,8 +8,8 @@ export interface SSDMConfig {
 }
 
 export interface SSDMConnectionParams {
-  shopUserId: string
-  returnUrl: string
+  shopId: string
+  mallId: string
 }
 
 export interface SSDMResponse {
@@ -30,12 +30,12 @@ export const SSDM_CONFIG: SSDMConfig = {
  * SSDM 연결 URL 생성
  */
 export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string {
-  const { shopUserId, returnUrl } = params
+  const { shopId, mallId } = params
   const baseUrl = SSDM_CONFIG.baseUrl
   
-  const url = new URL(`${baseUrl}/external-request/consent`)
-  url.searchParams.append('shopUserId', shopUserId)
-  url.searchParams.append('returnUrl', returnUrl)
+  const url = new URL(`${baseUrl}/consent`)
+  url.searchParams.append('shopId', shopId)
+  url.searchParams.append('mallId', mallId)
   
   return url.toString()
 }
@@ -43,10 +43,10 @@ export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string 
 /**
  * 쇼핑몰에서 SSDM으로 사용자 연결 (팝업 또는 새창)
  */
-export function connectToSSDM(shopUserId: string, returnUrl: string): Window | null {
+export function connectToSSDM(shopId: string, mallId: string): Window | null {
   const params: SSDMConnectionParams = {
-    shopUserId,
-    returnUrl
+    shopId,
+    mallId
   }
   
   const connectionUrl = generateSSDMConnectionUrl(params)

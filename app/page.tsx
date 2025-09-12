@@ -8,7 +8,7 @@ import ServiceIcons from "@/components/service-icons"
 import TodaysSelection from "@/components/todays-selection"
 import PublisherRecommendations from "@/components/publisher-recommendations"
 import { useAuth } from "@/contexts/AuthContext"
-import { PrivacySystemClient } from "@/lib/privacy-config"
+import { connectToSSDM } from "@/lib/ssdm-api"
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -21,22 +21,21 @@ export default function HomePage() {
     }
 
     try {
-      const client = new PrivacySystemClient()
+      // 이메일에서 shopId 추출 (예: user@example.com → user)
+      const emailParts = user.email?.split('@') || []
+      const shopId = emailParts[0] || user.uid
+      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
+      const mallId = PRIVACY_CONFIG.mallId
       
-      // 1. UID 생성
-      const uidResult = await client.generateUID(user.uid)
-      console.log('UID 생성 완료:', uidResult.uid)
+      // SSDM 연결 (쿼리스트링으로 직접 연결)
+      const popup = connectToSSDM(shopId, mallId)
       
-      // 2. JWT 발급
-      const jwtResult = await client.issueJWT(uidResult.uid, 'paper')
-      console.log('JWT 발급 완료:', jwtResult.sessionType, jwtResult.expiresIn)
+      if (!popup) {
+        alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+        return
+      }
       
-      // 3. 개인정보 요청
-      const infoResult = await client.requestUserInfo(jwtResult.jwt, ['name', 'phone', 'address'])
-      console.log('개인정보 요청 완료:', infoResult.viewerUrl)
-      
-      // 4. 택배사에 뷰어 URL 전달
-      await notifyDeliveryCompany(infoResult.viewerUrl)
+      console.log('SSDM 연결 완료:', shopId, mallId)
       
     } catch (error) {
       console.error('배송 정보 처리 실패:', error)

@@ -155,23 +155,24 @@ async function requestUidAndJwt(email: string, sessionType: 'paper' | 'qr') {
 
     const userId = userRecord.uid
 
-    // 2. 개인정보 시스템에 UID 요청
-    const { PrivacySystemClient } = await import('@/lib/privacy-config')
-    const privacyClient = new PrivacySystemClient()
-    
-    const uidResult = await privacyClient.generateUID(userId)
-    console.log('UID 생성 결과:', uidResult)
+    // 2. 이메일에서 shopId 추출 (예: user@example.com → user)
+    const emailParts = userRecord.email?.split('@') || []
+    const shopId = emailParts[0] || userRecord.uid
+    const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
+    const mallId = PRIVACY_CONFIG.mallId
 
-    // 3. JWT 발급 요청
-    const jwtResult = await privacyClient.issueJWT(uidResult.uid, sessionType)
-    console.log('JWT 발급 결과:', jwtResult)
+    // 3. SSDM 연결 URL 생성
+    const { generateSSDMConnectionUrl } = await import('@/lib/ssdm-api')
+    const consentUrl = generateSSDMConnectionUrl({ shopId, mallId })
+    
+    console.log('SSDM 연결 URL:', consentUrl)
 
     return NextResponse.json({
       success: true,
-      uid: uidResult.uid,
-      jwt: jwtResult.jwt,
+      shopId,
+      mallId,
+      consentUrl,
       sessionType,
-      expiresIn: jwtResult.expiresIn,
       userInfo: {
         email: userRecord.email,
         uid: userRecord.uid
@@ -200,23 +201,26 @@ async function validateUserConsent(email: string, requiredFields: string[]) {
       }, { status: 404 })
     }
 
-    // 2. UID 생성 (mallId_userId 형태)
-    const mallId = 'bookstore' // 우리 쇼핑몰 ID
-    const uid = `${mallId}_${userRecord.uid}`
+    // 2. 이메일에서 shopId 추출 (예: user@example.com → user)
+    const emailParts = userRecord.email?.split('@') || []
+    const shopId = emailParts[0] || userRecord.uid
+    const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
+    const mallId = PRIVACY_CONFIG.mallId
 
-    // 3. 개인정보 시스템에 동의 확인
-    const { PrivacySystemClient } = await import('@/lib/privacy-config')
-    const privacyClient = new PrivacySystemClient()
+    // 3. SSDM 연결 URL 생성 (동의 확인용)
+    const { generateSSDMConnectionUrl } = await import('@/lib/ssdm-api')
+    const consentUrl = generateSSDMConnectionUrl({ shopId, mallId })
     
-    const consentResult = await privacyClient.validateConsent(uid, requiredFields)
-    console.log('동의 확인 결과:', consentResult)
+    console.log('SSDM 동의 확인 URL:', consentUrl)
 
     return NextResponse.json({
       success: true,
-      uid,
-      consentStatus: consentResult.consentStatus,
-      allowedFields: consentResult.allowedFields,
-      expiresAt: consentResult.expiresAt,
+      shopId,
+      mallId,
+      consentUrl,
+      consentStatus: 'pending', // 기본값
+      allowedFields: [],
+      expiresAt: null,
       userInfo: {
         email: userRecord.email,
         uid: userRecord.uid
