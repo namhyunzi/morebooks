@@ -49,6 +49,7 @@ function CheckoutContent() {
   const [ssdmJWT, setSSMDJWT] = useState<string | null>(null)
   const [ssdmUID, setSSMDUID] = useState<string | null>(null)
   const [ssdmConnected, setSSMDConnected] = useState(false)
+  const [ssdmPopup, setSSMDPopup] = useState<Window | null>(null)
   
   // 개인정보 입력 방식 선택 상태
   const [useSSDM, setUseSSDM] = useState(false)
@@ -103,6 +104,18 @@ function CheckoutContent() {
           }
         } else {
           toast.error('개인정보 제공을 거부하셨습니다.')
+        }
+        
+        // 동의/거부 결과 처리 후 팝업 닫기
+        if (ssdmPopup && !ssdmPopup.closed) {
+          ssdmPopup.close()
+          setSSMDPopup(null)
+        }
+      } else if (event.data.type === 'close_popup') {
+        // 팝업 닫기 요청 처리
+        if (ssdmPopup && !ssdmPopup.closed) {
+          ssdmPopup.close()
+          setSSMDPopup(null)
         }
       }
     }
@@ -257,6 +270,9 @@ function CheckoutContent() {
       if (!popup) {
         return // 팝업 차단됨 (connectToSSDM에서 알림 처리)
       }
+      
+      // 팝업 참조 저장
+      setSSMDPopup(popup)
       
       toast.info('개인정보 보호 시스템으로 이동했습니다. 팝업에서 동의를 진행해주세요.')
     } catch (error) {
