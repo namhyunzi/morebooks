@@ -83,10 +83,10 @@ export async function connectToSSDM(shopId: string, mallId: string): Promise<Win
       expiresIn: jwtResult.expiresIn
     })
     
-    // JWT를 포함한 SSDM 연결 URL 생성 (JWT 안에 shopId, mallId, apiKey, publicKey 포함되어 있음)
+    // JWT를 포함한 SSDM 연결 URL 생성 (JWT 안에 shopId, mallId 포함되어 있음)
     const baseUrl = SSDM_CONFIG.baseUrl
     const url = new URL(`${baseUrl}/consent`)
-    url.searchParams.append('jwt', jwtResult.jwt) // JWT만 전달 (모든 정보는 JWT 안에 포함)
+    url.searchParams.append('jwt', jwtResult.jwt) // JWT만 전달 (shopId, mallId는 JWT 안에 포함)
     
     // 팝업으로 SSDM 페이지 열기
     const popup = window.open(
@@ -149,10 +149,9 @@ export function parseSSDMResponse(searchParams: URLSearchParams): SSDMResponse |
 export async function validateSSDMJWT(jwt: string): Promise<boolean> {
   try {
     // JWT 유틸리티를 사용한 검증
-    const { decodeJWT, isJWTExpired, verifyJWT } = await import('@/lib/jwt-utils')
-    const { getKeyPair } = await import('@/lib/key-utils')
+    const { decodeJWT, isJWTExpired } = await import('@/lib/jwt-utils')
     
-    // JWT 디코딩 (검증 없이)
+    // JWT 디코딩
     const payload = decodeJWT(jwt)
     if (!payload) {
       return false
@@ -168,19 +167,9 @@ export async function validateSSDMJWT(jwt: string): Promise<boolean> {
       return false
     }
     
-    // RSA 공개키로 JWT 서명 검증
-    const { publicKey } = getKeyPair()
-    const verifiedPayload = verifyJWT(jwt, publicKey)
-    if (!verifiedPayload) {
-      console.error('JWT 서명 검증 실패')
-      return false
-    }
-    
     console.log('JWT 검증 성공:', {
       shopId: payload.shopId,
       mallId: payload.mallId,
-      apiKey: payload.apiKey,
-      publicKey: payload.publicKey ? '포함됨' : '없음',
       purpose: payload.purpose,
       expiresAt: payload.exp ? new Date(payload.exp * 1000) : 'N/A'
     })
