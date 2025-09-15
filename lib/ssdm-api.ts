@@ -83,16 +83,18 @@ export async function connectToSSDM(shopId: string, mallId: string): Promise<Win
       expiresIn: jwtResult.expiresIn
     })
     
-    // JWT를 포함한 SSDM 연결 URL 생성 (JWT 안에 shopId, mallId 포함되어 있음)
-    const baseUrl = SSDM_CONFIG.baseUrl
-    const url = new URL(`${baseUrl}/consent`)
-    url.searchParams.append('jwt', jwtResult.jwt) // JWT만 전달 (shopId, mallId는 JWT 안에 포함)
+    // JWT를 sessionStorage에 저장
+    sessionStorage.setItem('consent_jwt', jwtResult.jwt)
     
-    // 팝업으로 SSDM 페이지 열기
+    // SSDM 연결 URL 생성 (JWT는 sessionStorage에서 가져옴)
+    const baseUrl = SSDM_CONFIG.baseUrl
+    const url = `${baseUrl}/consent`
+    
+    // 팝업으로 SSDM 페이지 열기 (원래 크기 유지)
     const popup = window.open(
-      url.toString(),
-      'ssdm_consent',
-      'width=600,height=800,scrollbars=yes,resizable=yes'
+      url,
+      'consent',
+      'width=500,height=600'
     )
     
     if (!popup) {
@@ -100,7 +102,7 @@ export async function connectToSSDM(shopId: string, mallId: string): Promise<Win
       return null
     }
     
-    console.log('SSDM 연결 페이지 열림 (JWT 포함):', url.toString())
+    console.log('SSDM 연결 페이지 열림 (JWT는 sessionStorage에 저장됨):', url)
     return popup
     
   } catch (error) {
@@ -121,7 +123,8 @@ export function parseSSDMResponse(searchParams: URLSearchParams): SSDMResponse |
   }
   
   if (status === 'success') {
-    const jwt = searchParams.get('jwt')
+    // JWT는 sessionStorage에서 가져옴
+    const jwt = sessionStorage.getItem('consent_jwt')
     const expiresIn = searchParams.get('expiresIn')
     const uid = searchParams.get('uid')
     
@@ -242,10 +245,9 @@ export function handleSSDMResult(
     return // SSDM 응답이 아님
   }
   
-  // URL에서 SSDM 파라미터 제거
+  // URL에서 SSDM 파라미터 제거 (JWT는 sessionStorage에서 가져오므로 URL에서 제거)
   const url = new URL(window.location.href)
   url.searchParams.delete('status')
-  url.searchParams.delete('jwt')
   url.searchParams.delete('expiresIn')
   url.searchParams.delete('uid')
   url.searchParams.delete('error')
@@ -258,6 +260,9 @@ export function handleSSDMResult(
     console.log('SSDM 연결 실패:', response.error)
     onError(response.error || 'unknown_error')
   }
+  
+  // SSDM 연결 완료 후 sessionStorage에서 JWT 제거
+  sessionStorage.removeItem('consent_jwt')
 }
 
 /**

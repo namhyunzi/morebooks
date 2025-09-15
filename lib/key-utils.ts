@@ -3,7 +3,18 @@ export function getKeyPair() {
   const publicKey = process.env.SHOP_PUBLIC_KEY
   const privateKey = process.env.SHOP_PRIVATE_KEY
   
+  console.log('키 쌍 확인:', {
+    hasPublicKey: !!publicKey,
+    hasPrivateKey: !!privateKey,
+    publicKeyLength: publicKey?.length || 0,
+    privateKeyLength: privateKey?.length || 0
+  })
+  
   if (!publicKey || !privateKey) {
+    console.error('키 쌍 누락:', {
+      SHOP_PUBLIC_KEY: process.env.SHOP_PUBLIC_KEY ? '설정됨' : '없음',
+      SHOP_PRIVATE_KEY: process.env.SHOP_PRIVATE_KEY ? '설정됨' : '없음'
+    })
     throw new Error('Public key or private key not configured')
   }
   
