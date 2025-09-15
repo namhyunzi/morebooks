@@ -113,7 +113,7 @@ function CheckoutContent() {
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-아니 내가   }, [user, router, searchParams])
+  }, [user, router, searchParams])
 
   const checkAppReturnData = (searchParams: URLSearchParams) => {
     // URL 파라미터에서 앱 데이터 확인
