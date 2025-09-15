@@ -241,8 +241,18 @@ function CheckoutContent() {
       const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
       const mallId = PRIVACY_CONFIG.mallId
       
-      // SSDM 연결 (서버사이드에서 안전하게 API 키 포함하여 연결)
-      const popup = await connectToSSDM(shopId, mallId)
+      // SSDM 연결 (동의 결과 콜백 포함)
+      const popup = await connectToSSDM(shopId, mallId, (result) => {
+        console.log('SSDM 동의 결과:', result)
+        
+        if (result.agreed) {
+          console.log('동의 완료:', result.consentType)
+          // 동의 시 후속 처리
+        } else {
+          console.log('동의 거부')
+          // 거부 시 후속 처리
+        }
+      })
       
       if (!popup) {
         return // 팝업 차단됨 (connectToSSDM에서 알림 처리)

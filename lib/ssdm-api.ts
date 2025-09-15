@@ -67,7 +67,11 @@ export async function generateSSDMJWT(params: SSDMConnectionParams): Promise<{ j
 /**
  * 쇼핑몰에서 SSDM으로 사용자 연결 (JWT 기반)
  */
-export async function connectToSSDM(shopId: string, mallId: string): Promise<Window | null> {
+export async function connectToSSDM(
+  shopId: string, 
+  mallId: string,
+  onConsentResult?: (result: { agreed: boolean, consentType: string, jwt?: string }) => void
+): Promise<Window | null> {
   try {
     const params: SSDMConnectionParams = {
       shopId,
@@ -99,6 +103,62 @@ export async function connectToSSDM(shopId: string, mallId: string): Promise<Win
       alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
       return null
     }
+    
+    // SSDM 도메인에서 오는 메시지 리스너 추가
+    const messageHandler = (event: MessageEvent) => {
+      // 보안: SSDM 도메인에서만 메시지 수신 허용
+      const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
+      if (event.origin !== ssdmOrigin) {
+        console.warn('신뢰할 수 없는 도메인에서 메시지 수신:', event.origin)
+        return
+      }
+      
+      console.log('SSDM에서 메시지 수신:', event.data)
+      
+      // 동의 결과 처리
+      if (event.data.type === 'consent_result') {
+        const { agreed, consentType, jwt } = event.data
+        
+        console.log('SSDM 동의 결과:', { agreed, consentType })
+        
+        // 팝업 닫기
+        if (popup && !popup.closed) {
+          popup.close()
+        }
+        
+        // 메시지 리스너 제거
+        window.removeEventListener('message', messageHandler)
+        
+        // 콜백 함수 호출
+        if (onConsentResult) {
+          onConsentResult({ agreed, consentType, jwt })
+        }
+      }
+      
+      // 팝업 닫기 요청 처리
+      if (event.data.type === 'close_popup') {
+        console.log('SSDM에서 팝업 닫기 요청')
+        
+        if (popup && !popup.closed) {
+          popup.close()
+        }
+        
+        // 메시지 리스너 제거
+        window.removeEventListener('message', messageHandler)
+      }
+    }
+    
+    // 메시지 리스너 등록
+    window.addEventListener('message', messageHandler)
+    
+    // 팝업이 수동으로 닫힌 경우 리스너 정리
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        console.log('SSDM 팝업이 수동으로 닫힘')
+        window.removeEventListener('message', messageHandler)
+        clearInterval(checkClosed)
+      }
+    }, 1000)
     
     console.log('SSDM 연결 페이지 열림 (JWT는 URL 파라미터로 전달됨):', url.toString())
     return popup
@@ -279,6 +339,20 @@ export function getSSDMErrorMessage(error: string): string {
     default:
       return '개인정보 보호 시스템 연결 중 오류가 발생했습니다.'
   }
+}
+
+/**
+ * SSDM 동의 팝업을 열고 결과를 처리하는 헬퍼 함수
+ */
+export async function openSSDMConsentPopup(
+  shopId: string, 
+  mallId: string
+): Promise<{ agreed: boolean, consentType: string, jwt?: string } | null> {
+  return new Promise((resolve) => {
+    connectToSSDM(shopId, mallId, (result) => {
+      resolve(result)
+    })
+  })
 }
 
 
