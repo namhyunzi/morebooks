@@ -113,7 +113,7 @@ function CheckoutContent() {
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [user, router, searchParams])
+아니 내가   }, [user, router, searchParams])
 
   const checkAppReturnData = (searchParams: URLSearchParams) => {
     // URL 파라미터에서 앱 데이터 확인
@@ -235,16 +235,13 @@ function CheckoutContent() {
     try {
       console.log('SSDM 개인정보 보호 시스템 연결 시작...')
       
-      // 현재 페이지 URL을 returnUrl로 사용
-      const returnUrl = window.location.href
-      
       // 이메일에서 shopId 추출 (예: user@example.com → user)
       const emailParts = user.email?.split('@') || []
       const shopId = emailParts[0] || user.uid
       const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
       const mallId = PRIVACY_CONFIG.mallId
       
-      // SSDM 연결 (API 라우트를 통해 연결)
+      // SSDM 연결 (서버사이드에서 안전하게 API 키 포함하여 연결)
       const popup = await connectToSSDM(shopId, mallId)
       
       if (!popup) {
@@ -271,17 +268,53 @@ function CheckoutContent() {
 
     // 개인정보 입력 방식에 따른 검증
     if (useManualInput) {
-      // 직접 입력 방식일 때만 폼 검증
-      if (!customerInfo.name || !customerInfo.phoneNumber || !customerInfo.address) {
-        alert('필수 정보를 모두 입력해주세요.\n\n- 이름\n- 전화번호\n- 주소')
+      // 직접 입력 방식일 때 상세한 폼 검증
+      const errors = []
+      
+      if (!customerInfo.name.trim()) {
+        errors.push('이름')
+      }
+      
+      if (!customerInfo.phoneNumber.trim()) {
+        errors.push('전화번호')
+      } else {
+        // 전화번호 형식 검증 (010-1234-5678)
+        const phoneRegex = /^010-\d{4}-\d{4}$/
+        const fullPhone = `${customerInfo.phonePrefix}-${customerInfo.phoneNumber}`
+        if (!phoneRegex.test(fullPhone)) {
+          errors.push('올바른 전화번호 형식 (010-1234-5678)')
+        }
+      }
+      
+      if (!customerInfo.address.trim()) {
+        errors.push('주소')
+      }
+      
+      if (!customerInfo.emailId.trim()) {
+        errors.push('이메일')
+      } else {
+        // 이메일 형식 검증
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        const fullEmail = `${customerInfo.emailId}@${customerInfo.emailDomain}`
+        if (!emailRegex.test(fullEmail)) {
+          errors.push('올바른 이메일 형식')
+        }
+      }
+      
+      if (errors.length > 0) {
+        alert(`다음 정보를 확인해주세요:\n\n• ${errors.join('\n• ')}`)
         return
       }
     } else if (useSSDM) {
       // SSDM 방식일 때는 연결 상태 검증
       if (!ssdmConnected) {
-        alert('개인정보 보호 시스템 연결이 필요합니다.')
+        alert('개인정보 보호 시스템 연결이 필요합니다.\n\n"개인정보 보호 시스템 사용"을 체크하고 연결해주세요.')
         return
       }
+    } else {
+      // 둘 다 선택되지 않은 경우
+      alert('개인정보 입력 방식을 선택해주세요.\n\n• 개인정보 보호 시스템 사용\n• 직접 입력하기')
+      return
     }
 
     if (!selectedBank || !depositorName) {

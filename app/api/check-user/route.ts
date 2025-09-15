@@ -161,17 +161,20 @@ async function requestUidAndJwt(email: string) {
     const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
     const mallId = PRIVACY_CONFIG.mallId
 
-    // 3. SSDM 연결 URL 생성
-    const { generateSSDMConnectionUrl } = await import('@/lib/ssdm-api')
-    const consentUrl = generateSSDMConnectionUrl({ shopId, mallId })
+    // 3. JWT 생성 (서버사이드에서 API 키로 생성)
+    const { generateJWT } = await import('@/lib/jwt-utils')
+    const apiKey = PRIVACY_CONFIG.apiKey
     
-    console.log('SSDM 연결 URL:', consentUrl)
+    const jwt = generateJWT({ shopId, mallId }, apiKey)
+    
+    console.log('JWT 생성 완료:', { shopId, mallId })
 
     return NextResponse.json({
       success: true,
       shopId,
       mallId,
-      consentUrl,
+      jwt,
+      expiresIn: 15 * 60, // 15분
       userInfo: {
         email: userRecord.email,
         uid: userRecord.uid
@@ -206,17 +209,19 @@ async function validateUserConsent(email: string, requiredFields: string[]) {
     const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
     const mallId = PRIVACY_CONFIG.mallId
 
-    // 3. SSDM 연결 URL 생성 (동의 확인용)
-    const { generateSSDMConnectionUrl } = await import('@/lib/ssdm-api')
-    const consentUrl = generateSSDMConnectionUrl({ shopId, mallId })
+    // 3. JWT 생성 (동의 확인용)
+    const { generateJWT } = await import('@/lib/jwt-utils')
+    const apiKey = PRIVACY_CONFIG.apiKey
+    const jwt = generateJWT({ shopId, mallId }, apiKey)
     
-    console.log('SSDM 동의 확인 URL:', consentUrl)
+    console.log('JWT 생성 완료 (동의 확인용):', { shopId, mallId })
 
     return NextResponse.json({
       success: true,
       shopId,
       mallId,
-      consentUrl,
+      jwt,
+      expiresIn: 15 * 60, // 15분
       consentStatus: 'pending', // 기본값
       allowedFields: [],
       expiresAt: null,

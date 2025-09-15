@@ -26,56 +26,88 @@ export const SSDM_CONFIG: SSDMConfig = {
 }
 
 /**
- * SSDM 연결 URL 생성
+ * JWT 토큰 생성 (서버사이드에서 API 키로 생성)
  */
-export function generateSSDMConnectionUrl(params: SSDMConnectionParams): string {
+export async function generateSSDMJWT(params: SSDMConnectionParams): Promise<{ jwt: string, expiresIn: number }> {
   const { shopId, mallId } = params
-  const baseUrl = SSDM_CONFIG.baseUrl
   
-  console.log('SSDM 설정 확인:', {
-    baseUrl,
-    shopId,
-    mallId,
-    'NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL': process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL
-  })
-  
-  if (!baseUrl || baseUrl === 'https://ssdm-demo.vercel.app') {
-    throw new Error('PRIVACY_SYSTEM_BASE_URL이 설정되지 않았습니다. .env.local 파일에 올바른 SSDM URL을 설정해주세요.')
+  try {
+    // 서버사이드 API 라우트를 통해 안전하게 JWT 생성
+    const response = await fetch('/api/ssdm/connect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ shopId, mallId })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(`JWT 생성 실패: ${errorData.error || response.status}`)
+    }
+    
+    const result = await response.json()
+    console.log('JWT 생성 성공:', {
+      shopId: result.shopId,
+      mallId: result.mallId,
+      expiresIn: result.expiresIn
+    })
+    
+    return {
+      jwt: result.jwt,
+      expiresIn: result.expiresIn
+    }
+    
+  } catch (error) {
+    console.error('JWT 생성 실패:', error)
+    throw error
   }
-  
-  const url = new URL(`${baseUrl}/consent`)
-  url.searchParams.append('shopId', shopId)
-  url.searchParams.append('mallId', mallId)
-  
-  console.log('생성된 SSDM URL:', url.toString())
-  return url.toString()
 }
 
 /**
- * 쇼핑몰에서 SSDM으로 사용자 연결 (팝업 또는 새창)
+ * 쇼핑몰에서 SSDM으로 사용자 연결 (JWT 기반)
  */
-export function connectToSSDM(shopId: string, mallId: string): Window | null {
-  const params: SSDMConnectionParams = {
-    shopId,
-    mallId
-  }
-  
-  const connectionUrl = generateSSDMConnectionUrl(params)
-  
-  // 팝업으로 SSDM 페이지 열기
-  const popup = window.open(
-    connectionUrl,
-    'ssdm_consent',
-    'width=600,height=800,scrollbars=yes,resizable=yes'
-  )
-  
-  if (!popup) {
-    alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+export async function connectToSSDM(shopId: string, mallId: string): Promise<Window | null> {
+  try {
+    const params: SSDMConnectionParams = {
+      shopId,
+      mallId
+    }
+    
+    // 서버사이드에서 안전하게 JWT 생성
+    const jwtResult = await generateSSDMJWT(params)
+    
+    console.log('SSDM JWT 생성 완료:', {
+      shopId,
+      mallId,
+      expiresIn: jwtResult.expiresIn
+    })
+    
+    // JWT를 포함한 SSDM 연결 URL 생성 (JWT 안에 shopId, mallId, apiKey, publicKey 포함되어 있음)
+    const baseUrl = SSDM_CONFIG.baseUrl
+    const url = new URL(`${baseUrl}/consent`)
+    url.searchParams.append('jwt', jwtResult.jwt) // JWT만 전달 (모든 정보는 JWT 안에 포함)
+    
+    // 팝업으로 SSDM 페이지 열기
+    const popup = window.open(
+      url.toString(),
+      'ssdm_consent',
+      'width=600,height=800,scrollbars=yes,resizable=yes'
+    )
+    
+    if (!popup) {
+      alert('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+      return null
+    }
+    
+    console.log('SSDM 연결 페이지 열림 (JWT 포함):', url.toString())
+    return popup
+    
+  } catch (error) {
+    console.error('SSDM 연결 실패:', error)
+    alert('SSDM 연결에 실패했습니다. 다시 시도해주세요.')
     return null
   }
-  
-  console.log('SSDM 연결 페이지 열림:', connectionUrl)
-  return popup
 }
 
 /**
@@ -116,29 +148,41 @@ export function parseSSDMResponse(searchParams: URLSearchParams): SSDMResponse |
  */
 export async function validateSSDMJWT(jwt: string): Promise<boolean> {
   try {
-    // JWT 기본 구조 확인
-    const parts = jwt.split('.')
-    if (parts.length !== 3) {
+    // JWT 유틸리티를 사용한 검증
+    const { decodeJWT, isJWTExpired, verifyJWT } = await import('@/lib/jwt-utils')
+    const { getKeyPair } = await import('@/lib/key-utils')
+    
+    // JWT 디코딩 (검증 없이)
+    const payload = decodeJWT(jwt)
+    if (!payload) {
       return false
     }
     
-    // payload 디코딩 (검증용)
-    const payload = JSON.parse(atob(parts[1]))
-    
     // 기본 필드 확인
-    if (!payload.uid || !payload.mallId) {
+    if (!payload.shopId || !payload.mallId) {
       return false
     }
     
     // 만료 시간 확인
-    if (payload.exp && payload.exp < Date.now() / 1000) {
+    if (isJWTExpired(jwt)) {
+      return false
+    }
+    
+    // RSA 공개키로 JWT 서명 검증
+    const { publicKey } = getKeyPair()
+    const verifiedPayload = verifyJWT(jwt, publicKey)
+    if (!verifiedPayload) {
+      console.error('JWT 서명 검증 실패')
       return false
     }
     
     console.log('JWT 검증 성공:', {
-      uid: payload.uid,
+      shopId: payload.shopId,
       mallId: payload.mallId,
-      expiresAt: new Date(payload.exp * 1000)
+      apiKey: payload.apiKey,
+      publicKey: payload.publicKey ? '포함됨' : '없음',
+      purpose: payload.purpose,
+      expiresAt: payload.exp ? new Date(payload.exp * 1000) : 'N/A'
     })
     
     return true

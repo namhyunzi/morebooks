@@ -1,8 +1,10 @@
-// 개인정보 시스템 연동 설정 - API Key만 필요
+// 개인정보 시스템 연동 설정 - 환경변수 기반
 export const PRIVACY_CONFIG = {
-  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || process.env.PRIVACY_SYSTEM_BASE_URL || 'https://ssdm-demo.vercel.app', // 클라이언트/서버 모두 지원
-  apiKey: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY || process.env.PRIVACY_SYSTEM_API_KEY || 'demo-api-key-12345', // 클라이언트/서버 모두 지원
-  mallId: process.env.NEXT_PUBLIC_MALL_ID || process.env.MALL_ID || 'morebooks', // 쇼핑몰 ID
+  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || 'https://ssdm-demo.vercel.app',
+  apiKey: process.env.PRIVACY_SYSTEM_API_KEY || 'demo-api-key-12345',
+  mallId: process.env.MALL_ID || 'morebooks',
+  publicKey: process.env.SHOP_PUBLIC_KEY, // 쇼핑몰 공개키
+  privateKey: process.env.SHOP_PRIVATE_KEY, // 쇼핑몰 개인키
   sessionTypes: {
     paper: { name: '종이송장', ttl: 3600 },
     qr: { name: 'QR송장', ttl: 43200 }
@@ -18,44 +20,7 @@ class PrivacySystemClient {
     this.apiKey = PRIVACY_CONFIG.apiKey
   }
 
-  // 1. generateUID - 내부 API 라우트를 통해 SSDM API 호출
-  async generateUID(userId: string) {
-    const response = await fetch('/api/ssdm/generate-uid', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ userId })
-    })
-    
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(`UID 생성 실패: ${errorData.error || response.status}`)
-    }
-    
-    const result = await response.json()
-    return { uid: result.uid }
-  }
-
-  // 2. issueJWT - 내부 API 라우트를 통해 SSDM API 호출
-  async issueJWT(uid: string) {
-    const response = await fetch('/api/ssdm/issue-jwt', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ uid })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(`JWT 발급 실패: ${errorData.error || response.status}`);
-    }
-    
-    return await response.json(); // { jwt: string, expiresIn: number }
-  }
-
-  // 3. 개인정보 요청 - 내부 API 라우트를 통해 SSDM API 호출
+  // 개인정보 요청 - 쇼핑몰에서 SSDM으로부터 받은 JWT로 개인정보 요청
   async requestUserInfo(jwt: string, requiredFields: string[]) {
     const response = await fetch('/api/ssdm/request-info', {
       method: 'POST',
