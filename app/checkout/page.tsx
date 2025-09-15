@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
 import { ChevronUp, HelpCircle, Smartphone, MapPin } from "lucide-react"
@@ -49,6 +50,10 @@ function CheckoutContent() {
   const [ssdmUID, setSSMDUID] = useState<string | null>(null)
   const [ssdmConnected, setSSMDConnected] = useState(false)
   
+  // 개인정보 입력 방식 선택 상태
+  const [useSSDM, setUseSSDM] = useState(false)
+  const [useManualInput, setUseManualInput] = useState(true)
+  
   
   // 주문자 정보 상태
   const [customerInfo, setCustomerInfo] = useState({
@@ -75,6 +80,38 @@ function CheckoutContent() {
       checkAppReturnData(searchParams)
       // SSDM에서 돌아온 데이터 확인
       checkSSMDReturnData(searchParams)
+    }
+
+    // 팝업에서 오는 메시지 리스너 등록
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'consent_result') {
+        if (event.data.agreed) {
+          localStorage.setItem('ssdm_connected', 'true')
+          if (event.data.jwt) {
+            // "이번만 허용" 사용자 → JWT 저장
+            localStorage.setItem('ssdm_jwt', event.data.jwt)
+            setSSMDJWT(event.data.jwt)
+            setSSMDConnected(true)
+            setUseSSDM(true)
+            setUseManualInput(false)
+            toast.success('개인정보 보호 시스템 연결 완료!')
+          } else {
+            // "항상 허용" 사용자 → JWT 없이 연결만 완료 (미리보기 페이지로 이동하므로 토스트 불필요)
+            setSSMDConnected(true)
+            setUseSSDM(true)
+            setUseManualInput(false)
+          }
+        } else {
+          toast.error('개인정보 제공을 거부하셨습니다.')
+        }
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+
+    // 컴포넌트 언마운트 시 리스너 제거
+    return () => {
+      window.removeEventListener('message', handleMessage)
     }
   }, [user, router, searchParams])
 
@@ -118,6 +155,10 @@ function CheckoutContent() {
           setSSMDJWT(response.jwt)
           setSSMDUID(response.uid)
           setSSMDConnected(true)
+          
+          // SSDM 연결 시 자동으로 SSDM 방식 선택
+          setUseSSDM(true)
+          setUseManualInput(false)
           
           toast.success(`개인정보 보호 시스템 연결 완료! (${response.expiresIn}초간 유효)`)
           
@@ -228,10 +269,19 @@ function CheckoutContent() {
       return
     }
 
-    // 필수 정보 검증
-    if (!customerInfo.name || !customerInfo.phoneNumber || !customerInfo.address) {
-      alert('필수 정보를 모두 입력해주세요.\n\n- 이름\n- 전화번호\n- 주소')
-      return
+    // 개인정보 입력 방식에 따른 검증
+    if (useManualInput) {
+      // 직접 입력 방식일 때만 폼 검증
+      if (!customerInfo.name || !customerInfo.phoneNumber || !customerInfo.address) {
+        alert('필수 정보를 모두 입력해주세요.\n\n- 이름\n- 전화번호\n- 주소')
+        return
+      }
+    } else if (useSSDM) {
+      // SSDM 방식일 때는 연결 상태 검증
+      if (!ssdmConnected) {
+        alert('개인정보 보호 시스템 연결이 필요합니다.')
+        return
+      }
     }
 
     if (!selectedBank || !depositorName) {
@@ -257,12 +307,19 @@ function CheckoutContent() {
         status: 'paid' as const,
         paymentMethod: 'bank_transfer' as const,
         paymentStatus: 'completed' as const,
-        shippingAddress: {
+        shippingAddress: useManualInput ? {
           name: customerInfo.name,
           phone: `${customerInfo.phonePrefix}-${customerInfo.phoneNumber}`,
           address: customerInfo.address,
           detailAddress: customerInfo.detailAddress,
           zipCode: customerInfo.postalCode
+        } : {
+          // SSDM 방식일 때는 빈 값으로 설정 (택배사가 JWT로 접근)
+          name: "",
+          phone: "",
+          address: "",
+          detailAddress: "",
+          zipCode: ""
         },
         shippingFee: 3000,
         finalAmount: totalAmount + 3000
@@ -272,17 +329,9 @@ function CheckoutContent() {
       const result = await processBankTransferOrder(orderData, selectedBank, depositorName)
       
       if (result.success) {
-        // SSDM JWT가 있으면 택배사에 전달
-        if (ssdmJWT && result.orderId) {
-          try {
-            const deliveryAuthSuccess = await sendJWTToDeliveryService(ssdmJWT, result.orderId)
-            if (deliveryAuthSuccess) {
-              toast.success('개인정보 보호 시스템을 통한 안전한 배송이 설정되었습니다!')
-            }
-          } catch (error) {
-            console.error('택배사 JWT 전달 실패:', error)
-            // 실패해도 주문은 계속 진행
-          }
+        // SSDM 방식일 때 JWT 처리
+        if (useSSDM && result.orderId) {
+          await placeOrderWithSSDM(result.orderId)
         }
         
         // 장바구니 비우기
@@ -300,6 +349,71 @@ function CheckoutContent() {
       toast.error('주문 처리 중 오류가 발생했습니다.')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  // SSDM을 통한 주문 처리 함수
+  const placeOrderWithSSDM = async (orderId: string) => {
+    const existingJWT = localStorage.getItem('ssdm_jwt')
+    
+    if (existingJWT) {
+      // "이번만 허용" 사용자 → 기존 JWT 사용
+      try {
+        const deliveryAuthSuccess = await sendJWTToDeliveryService(existingJWT, orderId)
+        if (deliveryAuthSuccess) {
+          toast.success('개인정보 보호 시스템을 통한 안전한 배송이 설정되었습니다!')
+        }
+        // JWT 사용 후 삭제
+        localStorage.removeItem('ssdm_jwt')
+        setSSMDJWT(null)
+      } catch (error) {
+        console.error('택배사 JWT 전달 실패:', error)
+        // 실패해도 주문은 계속 진행
+      }
+    } else {
+      // "항상 허용" 사용자 → 주문 시에만 JWT 발급 요청
+      try {
+        // SSDM에서 배송용 JWT 발급 요청
+        const newJWT = await requestNewJWTForDelivery(orderId)
+        if (newJWT) {
+          const deliveryAuthSuccess = await sendJWTToDeliveryService(newJWT, orderId)
+          if (deliveryAuthSuccess) {
+            toast.success('개인정보 보호 시스템을 통한 안전한 배송이 설정되었습니다!')
+          }
+        } else {
+          console.warn('항상 허용 사용자의 배송용 JWT 발급 실패')
+        }
+      } catch (error) {
+        console.error('배송용 JWT 발급 실패:', error)
+        // 실패해도 주문은 계속 진행
+      }
+    }
+  }
+
+  // 배송용 JWT 발급 요청 함수
+  const requestNewJWTForDelivery = async (orderId: string): Promise<string | null> => {
+    try {
+      // SSDM API를 통해 배송용 JWT 발급 요청
+      const response = await fetch('/api/ssdm/issue-jwt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderId,
+          purpose: 'delivery'
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return data.jwt || null
+      }
+      
+      return null
+    } catch (error) {
+      console.error('배송용 JWT 발급 요청 실패:', error)
+      return null
     }
   }
 
@@ -406,47 +520,86 @@ function CheckoutContent() {
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <h3 className="font-bold text-lg mb-6">주문자 정보</h3>
               
-              {/* SSDM 연결 배너 */}
-              <div className={`rounded-lg p-4 mb-6 text-white transition-colors ${
-                ssdmConnected 
-                  ? 'bg-gradient-to-r from-green-500 to-green-600' 
-                  : 'bg-gradient-to-r from-[#A2B38B] to-[#8fa076]'
-              }`}>
+              {/* 개인정보 입력 방식 선택 */}
+              <div className="space-y-4 mb-6">
+                {/* SSDM 방식 선택 */}
                 <div className="flex items-center space-x-3">
-                  <Smartphone className="w-6 h-6" />
-                  <div className="flex-1">
-                    {ssdmConnected ? (
-                      <>
-                        <h4 className="font-semibold text-sm">개인정보 보호 시스템 연결 완료!</h4>
-                        <p className="text-xs opacity-90 mt-1">안전한 배송을 위해 택배사에 임시 권한이 부여됩니다.</p>
-                      </>
-                    ) : (
-                      <>
-                        <h4 className="font-semibold text-sm">개인정보 보호 시스템으로 안전하게 주문하세요!</h4>
-                        <p className="text-xs opacity-90 mt-1">직접 입력 없이 개인정보를 보호하며 주문할 수 있습니다.</p>
-                      </>
+                  <Checkbox 
+                    id="use-ssdm"
+                    checked={useSSDM}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setUseSSDM(true)
+                        setUseManualInput(false)
+                      }
+                    }}
+                  />
+                  <Label htmlFor="use-ssdm" className="text-sm font-medium">
+                    개인정보 보호 시스템 사용
+                  </Label>
+                </div>
+
+                {/* SSDM 연결 배너 */}
+                <div className={`rounded-lg p-4 text-white transition-all ${
+                  useSSDM 
+                    ? ssdmConnected 
+                      ? 'bg-gradient-to-r from-green-500 to-green-600' 
+                      : 'bg-gradient-to-r from-[#A2B38B] to-[#8fa076]'
+                    : 'bg-gray-200 opacity-50'
+                }`}>
+                  <div className="flex items-center space-x-3">
+                    <Smartphone className="w-6 h-6" />
+                    <div className="flex-1">
+                      {ssdmConnected ? (
+                        <>
+                          <h4 className="font-semibold text-sm">개인정보 보호 시스템 연결 완료!</h4>
+                          <p className="text-xs opacity-90 mt-1">안전한 배송을 위해 택배사에 임시 권한이 부여됩니다.</p>
+                        </>
+                      ) : (
+                        <>
+                          <h4 className="font-semibold text-sm">개인정보 보호 시스템으로 안전하게 주문하세요!</h4>
+                          <p className="text-xs opacity-90 mt-1">직접 입력 없이 개인정보를 보호하며 주문할 수 있습니다.</p>
+                        </>
+                      )}
+                    </div>
+                    {useSSDM && !ssdmConnected && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
+                        onClick={handleSSMDConnect}
+                      >
+                        개인정보 연결하기
+                      </Button>
+                    )}
+                    {useSSDM && ssdmConnected && (
+                      <div className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded">
+                        연결됨
+                      </div>
                     )}
                   </div>
-                  {!ssdmConnected && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
-                      onClick={handleSSMDConnect}
-                    >
-                      개인정보 연결하기
-                    </Button>
-                  )}
-                  {ssdmConnected && (
-                    <div className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded">
-                      연결됨
-                    </div>
-                  )}
+                </div>
+
+                {/* 직접 입력 방식 선택 */}
+                <div className="flex items-center space-x-3">
+                  <Checkbox 
+                    id="use-manual"
+                    checked={useManualInput}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setUseManualInput(true)
+                        setUseSSDM(false)
+                      }
+                    }}
+                  />
+                  <Label htmlFor="use-manual" className="text-sm font-medium">
+                    직접 입력하기
+                  </Label>
                 </div>
               </div>
 
               {/* 주문자 정보 입력 폼 */}
-              <div className="space-y-4">
+              <div className={`space-y-4 ${!useManualInput ? 'opacity-50 pointer-events-none' : ''}`}>
                 {/* 이름 */}
                 <div className="flex items-center">
                   <Label htmlFor="name" className="w-20 text-sm font-medium text-gray-700">이름</Label>
@@ -458,6 +611,7 @@ function CheckoutContent() {
                       value={customerInfo.name}
                       onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
                       maxLength={10}
+                      disabled={!useManualInput}
                     />
                   </div>
                 </div>
@@ -472,11 +626,13 @@ function CheckoutContent() {
                       className="flex-1 border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]"
                       value={customerInfo.emailId}
                       onChange={(e) => setCustomerInfo({...customerInfo, emailId: e.target.value})}
+                      disabled={!useManualInput}
                     />
                     <span className="text-gray-500">@</span>
                     <Select 
                       value={customerInfo.emailDomain} 
                       onValueChange={(value) => setCustomerInfo({...customerInfo, emailDomain: value})}
+                      disabled={!useManualInput}
                     >
                       <SelectTrigger className="w-32 border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]">
                         <SelectValue />
@@ -499,6 +655,7 @@ function CheckoutContent() {
                     <Select 
                       value={customerInfo.phonePrefix} 
                       onValueChange={(value) => setCustomerInfo({...customerInfo, phonePrefix: value})}
+                      disabled={!useManualInput}
                     >
                       <SelectTrigger className="w-20 border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]">
                         <SelectValue />
@@ -518,6 +675,7 @@ function CheckoutContent() {
                       className="flex-1 border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]"
                       value={customerInfo.phoneNumber}
                       onChange={(e) => setCustomerInfo({...customerInfo, phoneNumber: e.target.value})}
+                      disabled={!useManualInput}
                     />
                   </div>
                 </div>
@@ -533,6 +691,7 @@ function CheckoutContent() {
                         size="sm"
                         className="border-[#A2B38B] text-[#A2B38B] hover:bg-[#A2B38B] hover:text-white"
                         onClick={handleAddressSearch}
+                        disabled={!useManualInput}
                       >
                         <MapPin className="w-4 h-4 mr-1" />
                         주소찾기
@@ -543,6 +702,7 @@ function CheckoutContent() {
                         value={customerInfo.postalCode}
                         onChange={(e) => setCustomerInfo({...customerInfo, postalCode: e.target.value})}
                         readOnly
+                        disabled={!useManualInput}
                       />
                     </div>
                     <Input 
@@ -551,12 +711,14 @@ function CheckoutContent() {
                       value={customerInfo.address}
                       onChange={(e) => setCustomerInfo({...customerInfo, address: e.target.value})}
                       readOnly
+                      disabled={!useManualInput}
                     />
                     <Input 
                       placeholder="상세주소를 입력해주세요"
                       className="w-full border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]"
                       value={customerInfo.detailAddress}
                       onChange={(e) => setCustomerInfo({...customerInfo, detailAddress: e.target.value})}
+                      disabled={!useManualInput}
                     />
                   </div>
                 </div>

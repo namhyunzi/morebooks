@@ -153,16 +153,15 @@ export async function validateSSDMJWT(jwt: string): Promise<boolean> {
  */
 export async function sendJWTToDeliveryService(jwt: string, orderId: string): Promise<boolean> {
   try {
-    // 여기서는 모의 택배사 API 호출
-    console.log('택배사에 JWT 전달:', {
-      jwt,
-      orderId,
-      message: '이 JWT로 고객의 개인정보에 접근할 수 있습니다 (15분간 유효)'
-    })
-    
-    // 실제 구현 시에는 택배사 API 엔드포인트로 요청
-    /*
-    const response = await fetch('/api/delivery/authorize', {
+    // JWT 유효성 검증
+    const isValidJWT = await validateSSDMJWT(jwt)
+    if (!isValidJWT) {
+      console.error('유효하지 않은 JWT:', jwt)
+      return false
+    }
+
+    // 택배사 API 호출
+    const response = await fetch('/api/notify-delivery', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,12 +169,24 @@ export async function sendJWTToDeliveryService(jwt: string, orderId: string): Pr
       },
       body: JSON.stringify({ 
         orderId,
-        accessToken: jwt
+        accessToken: jwt,
+        purpose: 'delivery_authorization'
       })
     })
-    
-    return response.ok
-    */
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('택배사 JWT 전달 실패:', response.status, errorText)
+      return false
+    }
+
+    const result = await response.json()
+    console.log('택배사 JWT 전달 성공:', {
+      orderId,
+      deliveryCompany: result.deliveryCompany,
+      trackingNumber: result.trackingNumber,
+      message: '이 JWT로 고객의 개인정보에 접근할 수 있습니다 (15분간 유효)'
+    })
     
     return true
   } catch (error) {
