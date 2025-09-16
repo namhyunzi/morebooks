@@ -680,7 +680,7 @@ function CheckoutContent() {
                     ? ssdmConnected 
                       ? consentStatus.autoConsent
                         ? 'bg-gradient-to-r from-blue-500 to-blue-600' // 항상 동의
-                        : 'bg-gradient-to-r from-green-500 to-green-600' // 수동 동의
+                        : 'bg-gradient-to-r from-green-400 to-green-500' // 수동 동의 (채도 낮춤)
                       : 'bg-gradient-to-r from-[#A2B38B] to-[#8fa076]'
                     : 'bg-gray-200 opacity-50'
                 }`}>
@@ -717,19 +717,14 @@ function CheckoutContent() {
                       </Button>
                     )}
                     {useSSDM && ssdmConnected && (
-                      <div className="flex items-center space-x-2">
-                        <div className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded">
-                          {consentStatus.autoConsent ? '자동 동의' : '연결됨'}
-                        </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="bg-white bg-opacity-20 text-white border-white hover:bg-white hover:text-gray-800 text-xs"
-                          onClick={openPreview}
-                        >
-                          정보 확인
-                        </Button>
-                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="bg-white bg-opacity-20 text-white border-white hover:bg-white hover:text-gray-800 text-xs"
+                        onClick={openPreview}
+                      >
+                        제공된 정보 확인
+                      </Button>
                     )}
                   </div>
                 </div>
