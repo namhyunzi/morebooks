@@ -5,58 +5,70 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Package, ChevronRight } from "lucide-react"
+import { Calendar as CalendarIcon, ChevronRight } from "lucide-react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import Link from "next/link"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
-import { useState } from "react"
-
-const orderHistory = [
-  {
-    id: "001-A891693106",
-    date: "2024-01-15",
-    title: "워런 버핏과 찰리 멍거",
-    status: "배송완료",
-    paymentStatus: "결제완료",
-    totalAmount: 22500,
-    quantity: 1,
-    image: "/abstract-book-cover.png",
-  },
-  {
-    id: "001-A031029155",
-    date: "2024-01-10",
-    title: "돈의 심리학",
-    status: "배송중",
-    paymentStatus: "결제완료",
-    totalAmount: 18000,
-    quantity: 1,
-    image: "/psychology-book-cover.png",
-  },
-  {
-    id: "001-A911919155",
-    date: "2024-01-05",
-    title: "마침내 특이점이 시작된다",
-    status: "준비중",
-    paymentStatus: "결제완료",
-    totalAmount: 20000,
-    quantity: 1,
-    image: "/publisher-book-4.jpg",
-  },
-]
+import { useState, useEffect } from "react"
+import { useAuth } from "@/contexts/AuthContext"
+import { getUserOrders, Order } from "@/lib/firebase-realtime"
 
 export default function OrderDetailsPage() {
+  const { user } = useAuth()
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState<Date>()
   const [endDate, setEndDate] = useState<Date>()
   const [statusFilter, setStatusFilter] = useState("all")
   const [productName, setProductName] = useState("")
 
-  const filteredOrders = orderHistory.filter(order => {
+  // 사용자 주문 정보 로드
+  useEffect(() => {
+    const loadOrders = async () => {
+      if (!user) return
+      
+      try {
+        const userOrders = await getUserOrders(user.uid)
+        setOrders(userOrders)
+      } catch (error) {
+        console.error('주문 정보 로드 실패:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadOrders()
+  }, [user])
+
+  // 주문 상태 한글 변환
+  const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+      pending: '주문접수',
+      paid: '결제완료',
+      processing: '상품준비중',
+      shipped: '출고작업중',
+      delivered: '배송완료',
+      cancelled: '주문취소'
+    }
+    return statusMap[status] || status
+  }
+
+  // 주문 상품명 생성
+  const getOrderTitle = (order: Order) => {
+    if (order.items.length === 1) {
+      return order.items[0].title
+    } else {
+      return `${order.items[0].title} 외 ${order.items.length - 1}건`
+    }
+  }
+
+  const filteredOrders = orders.filter(order => {
     if (statusFilter !== "all" && order.status !== statusFilter) return false
-    if (startDate && new Date(order.date) < startDate) return false
-    if (endDate && new Date(order.date) > endDate) return false
-    if (productName && !order.title.toLowerCase().includes(productName.toLowerCase())) return false
+    if (startDate && new Date(order.createdAt) < startDate) return false
+    if (endDate && new Date(order.createdAt) > endDate) return false
+    if (productName && !getOrderTitle(order).toLowerCase().includes(productName.toLowerCase())) return false
     return true
   })
 
@@ -173,11 +185,12 @@ export default function OrderDetailsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체내역</SelectItem>
-                    <SelectItem value="준비중">준비중</SelectItem>
-                    <SelectItem value="배송중">배송중</SelectItem>
-                    <SelectItem value="배송완료">배송완료</SelectItem>
-                    <SelectItem value="취소">취소</SelectItem>
-                    <SelectItem value="교환/반품">교환/반품</SelectItem>
+                    <SelectItem value="pending">주문접수</SelectItem>
+                    <SelectItem value="paid">결제완료</SelectItem>
+                    <SelectItem value="processing">상품준비중</SelectItem>
+                    <SelectItem value="shipped">출고작업중</SelectItem>
+                    <SelectItem value="delivered">배송완료</SelectItem>
+                    <SelectItem value="cancelled">주문취소</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -209,7 +222,11 @@ export default function OrderDetailsPage() {
           <div className="bg-white rounded-lg p-6 border border-gray-200">
             <h2 className="font-bold text-lg mb-6">주문 내역</h2>
             
-            {filteredOrders.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-12">
+                <p className="text-gray-600 mb-6">주문 정보를 불러오는 중...</p>
+              </div>
+            ) : filteredOrders.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -223,9 +240,11 @@ export default function OrderDetailsPage() {
                   <tbody>
                     {filteredOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-100">
-                        <td className="py-3 px-4 text-sm">{order.date}</td>
+                        <td className="py-3 px-4 text-sm">
+                          {new Date(order.createdAt).toLocaleDateString('ko-KR')}
+                        </td>
                         <td className="py-3 px-4 text-sm text-[#6B7A4F]">{order.id}</td>
-                        <td className="py-3 px-4 text-sm">{order.title}</td>
+                        <td className="py-3 px-4 text-sm">{getOrderTitle(order)}</td>
                         <td className="py-3 px-4">
                           <div className="flex space-x-2">
                             <Button 
@@ -236,7 +255,7 @@ export default function OrderDetailsPage() {
                             >
                               <Link href={`/mypage/order-detail/${order.id}`}>상세조회</Link>
                             </Button>
-                            {order.status !== "배송완료" && order.status !== "배송중" && order.status !== "준비중" && (
+                            {order.status !== "delivered" && order.status !== "cancelled" && (
                               <Button 
                                 variant="outline" 
                                 size="sm" 

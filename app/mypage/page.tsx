@@ -2,41 +2,55 @@
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Package } from "lucide-react"
 import Link from "next/link"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
 import { useAuth } from "@/contexts/AuthContext"
-
-const orderHistory = [
-  {
-    id: "001-A891693106",
-    date: "2017-09-27",
-    title: "남자한 미술 이야기 1 권",
-    status: "상세조회",
-    paymentStatus: "결제완료",
-    deliveryStatus: "배송완료",
-  },
-  {
-    id: "001-A031029155",
-    date: "2015-07-23",
-    title: "알라딘 캐시(1,000원) 외",
-    status: "상세조회",
-    paymentStatus: "결제완료",
-    deliveryStatus: "배송완료",
-  },
-  {
-    id: "001-A911919155",
-    date: "2015-07-23",
-    title: "알라딘 캐시(5,000원) 외",
-    status: "상세조회",
-    paymentStatus: "결제완료",
-    deliveryStatus: "배송완료",
-  },
-]
+import { useState, useEffect } from "react"
+import { getUserOrders, Order } from "@/lib/firebase-realtime"
 
 export default function MyPage() {
   const { user } = useAuth()
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  
+  // 사용자 주문 정보 로드
+  useEffect(() => {
+    const loadOrders = async () => {
+      if (!user) return
+      
+      try {
+        const userOrders = await getUserOrders(user.uid)
+        setOrders(userOrders)
+      } catch (error) {
+        console.error('주문 정보 로드 실패:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadOrders()
+  }, [user])
+  
+  // 주문 상태별 개수 계산
+  const getOrderCounts = () => {
+    const counts = {
+      pending: 0,
+      paid: 0,
+      processing: 0,
+      shipped: 0,
+      delivered: 0,
+      cancelled: 0
+    }
+    
+    orders.forEach(order => {
+      if (order.status in counts) {
+        counts[order.status as keyof typeof counts]++
+      }
+    })
+    
+    return counts
+  }
   
   // 사용자 이름 가져오기 (구글: displayName, 이메일: 이메일 아이디 부분)
   const getUserName = () => {
@@ -53,6 +67,30 @@ export default function MyPage() {
     const name = getUserName()
     return name.charAt(0).toUpperCase()
   }
+  
+  // 주문 상태 한글 변환
+  const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+      pending: '주문접수',
+      paid: '결제완료',
+      processing: '상품준비중',
+      shipped: '출고작업중',
+      delivered: '배송완료',
+      cancelled: '주문취소'
+    }
+    return statusMap[status] || status
+  }
+  
+  // 주문 상품명 생성
+  const getOrderTitle = (order: Order) => {
+    if (order.items.length === 1) {
+      return order.items[0].title
+    } else {
+      return `${order.items[0].title} 외 ${order.items.length - 1}건`
+    }
+  }
+  
+  const orderCounts = getOrderCounts()
 
   return (
     <div className="min-h-screen bg-background">
@@ -137,34 +175,34 @@ export default function MyPage() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold">주문 현황</h2>
                 <Button variant="ghost" size="sm" asChild>
-                  <Link href="/mypage/order-details">주문내역 전체보기 ></Link>
+                  <Link href="/mypage/order-details">주문내역 전체보기 &gt;</Link>
                 </Button>
               </div>
 
               <div className="border-t border-gray-200 pt-6">
                 <div className="flex items-center justify-between">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-400">0</div>
+                    <div className="text-2xl font-bold text-gray-400">{orderCounts.pending}</div>
                     <div className="text-sm text-gray-600">주문접수</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-400">0</div>
+                    <div className="text-2xl font-bold text-gray-400">{orderCounts.paid}</div>
                     <div className="text-sm text-gray-600">결제완료</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-400">0</div>
+                    <div className="text-2xl font-bold text-gray-400">{orderCounts.processing}</div>
                     <div className="text-sm text-gray-600">상품준비중</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-400">0</div>
+                    <div className="text-2xl font-bold text-gray-400">{orderCounts.shipped}</div>
                     <div className="text-sm text-gray-600">출고작업중</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-400">0</div>
+                    <div className="text-2xl font-bold text-gray-400">{orderCounts.shipped}</div>
                     <div className="text-sm text-gray-600">출고완료</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-400">0</div>
+                    <div className="text-2xl font-bold text-gray-400">{orderCounts.delivered}</div>
                     <div className="text-sm text-gray-600">배송완료</div>
                   </div>
                 </div>
@@ -186,34 +224,50 @@ export default function MyPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {orderHistory.map((order) => (
-                      <tr key={order.id} className="border-b border-gray-100">
-                        <td className="py-3 px-4 text-sm">{order.date}</td>
-                        <td className="py-3 px-4 text-sm text-[#6B7A4F]">{order.id}</td>
-                        <td className="py-3 px-4 text-sm">{order.title}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex space-x-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="border-[#A2B38B] text-[#A2B38B] hover:bg-[#A2B38B] hover:text-white"
-                              asChild
-                            >
-                              <Link href={`/mypage/order-detail/${order.id}`}>상세조회</Link>
-                            </Button>
-                            {order.deliveryStatus !== "배송완료" && order.deliveryStatus !== "배송중" && order.deliveryStatus !== "상품준비중" && (
+                    {loading ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-gray-500">
+                          주문 정보를 불러오는 중...
+                        </td>
+                      </tr>
+                    ) : orders.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-gray-500">
+                          주문 내역이 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      orders.slice(0, 5).map((order) => (
+                        <tr key={order.id} className="border-b border-gray-100">
+                          <td className="py-3 px-4 text-sm">
+                            {new Date(order.createdAt).toLocaleDateString('ko-KR')}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-[#6B7A4F]">{order.id}</td>
+                          <td className="py-3 px-4 text-sm">{getOrderTitle(order)}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex space-x-2">
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                                className="border-[#A2B38B] text-[#A2B38B] hover:bg-[#A2B38B] hover:text-white"
+                                asChild
                               >
-                                취소
+                                <Link href={`/mypage/order-detail/${order.id}`}>상세조회</Link>
                               </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {order.status !== "delivered" && order.status !== "cancelled" && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                                >
+                                  취소
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

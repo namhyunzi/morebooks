@@ -189,7 +189,11 @@ export const getOrder = async (orderId: string): Promise<Order | null> => {
     const snapshot = await get(orderRef)
     
     if (snapshot.exists()) {
-      return snapshot.val()
+      const orderData = snapshot.val()
+      return {
+        ...orderData,
+        id: orderId // Firebase 키를 id로 설정
+      }
     }
     return null
   } catch (error) {
@@ -205,7 +209,12 @@ export const getUserOrders = async (userId: string): Promise<Order[]> => {
     
     if (snapshot.exists()) {
       const orders = snapshot.val()
-      return Object.values(orders).filter((order: any) => order.userId === userId) as Order[]
+      return Object.entries(orders)
+        .filter(([key, order]: [string, any]) => order.userId === userId)
+        .map(([key, order]: [string, any]) => ({
+          ...order,
+          id: key // Firebase 키를 id로 설정
+        })) as Order[]
     }
     return []
   } catch (error) {
@@ -358,9 +367,13 @@ export const processBankTransferOrder = async (
       return { success: false, error: '유효하지 않은 은행입니다.' }
     }
 
+    // 주문번호 생성 (ORD-YYYYMMDD-001 형식)
+    const today = new Date()
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '') // YYYYMMDD
+    const orderId = `ORD-${dateStr}-001` // 일단 001로 고정, 나중에 순번 로직 추가 가능
+    
     // 주문 생성 (결제완료 상태로)
-    const ordersRef = ref(realtimeDb, 'orders')
-    const newOrderRef = push(ordersRef)
+    const orderRef = ref(realtimeDb, `orders/${orderId}`)
     
     const order: Order = {
       ...orderData,
@@ -378,12 +391,12 @@ export const processBankTransferOrder = async (
       updatedAt: new Date().toISOString()
     }
     
-    await set(newOrderRef, order)
+    await set(orderRef, order)
 
     // 결제 내역 저장
-    const paymentRef = ref(realtimeDb, `payments/${newOrderRef.key}`)
+    const paymentRef = ref(realtimeDb, `payments/${orderId}`)
     await set(paymentRef, {
-      orderId: newOrderRef.key,
+      orderId: orderId,
       paymentMethod: 'bank_transfer',
       paymentStatus: 'completed',
       amount: order.totalAmount,
@@ -393,7 +406,7 @@ export const processBankTransferOrder = async (
       createdAt: new Date().toISOString()
     })
     
-    return { success: true, orderId: newOrderRef.key, bankAccount }
+    return { success: true, orderId: orderId, bankAccount }
   } catch (error) {
     console.error('무통장입금 주문 처리 에러:', error)
     return { success: false, error }
