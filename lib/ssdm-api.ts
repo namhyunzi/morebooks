@@ -103,15 +103,24 @@ export async function connectToSSDM(
       return null
     }
     
-    // 팝업이 로드되면 postMessage로 JWT 전달
+    // 팝업 열자마자 즉시 postMessage로 JWT 전달
     const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
     console.log("ssdmOrigin 팝업열떄 ",ssdmOrigin);
-    popup.addEventListener('load', () => {
+    
+    // 즉시 JWT 전송 (팝업 열자마자)
+    console.log('팝업 열자마자 JWT 전송 시작');
+    console.log('전송할 JWT:', jwtResult.jwt.substring(0, 50) + '...');
+    console.log('전송할 targetOrigin:', ssdmOrigin);
+    
+    try {
       popup.postMessage({
         type: 'init_consent',
         jwt: jwtResult.jwt
       }, ssdmOrigin)
-    })
+      console.log('JWT 전송 성공');
+    } catch (error) {
+      console.error('JWT 전송 실패:', error);
+    }
     
     // SSDM 도메인에서 오는 메시지 리스너 추가
     const messageHandler = (event: MessageEvent) => {
@@ -182,7 +191,12 @@ export async function connectToSSDM(
     
   } catch (error) {
     console.error('SSDM 연결 실패:', error)
-    alert('SSDM 연결에 실패했습니다. 다시 시도해주세요.')
+    console.error('에러 상세:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      error: error
+    })
+    alert(`SSDM 연결에 실패했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`)
     return null
   }
 }
