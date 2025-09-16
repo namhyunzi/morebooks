@@ -447,52 +447,18 @@ function CheckoutContent() {
         status: 'paid' as const,
         paymentMethod: 'bank_transfer' as const,
         paymentStatus: 'completed' as const,
-        shippingAddress: useManualInput ? {
-          name: customerInfo.name,
-          phone: `${customerInfo.phonePrefix}-${customerInfo.phoneNumber}`,
-          address: customerInfo.address,
-          detailAddress: customerInfo.detailAddress,
-          zipCode: customerInfo.postalCode
-        } : {
-          // SSDM 방식일 때는 빈 값으로 설정 (JWT로 접근)
-          name: "",
-          phone: "",
-          address: "",
-          detailAddress: "",
-          zipCode: ""
-        },
+        // SSDM에서 개인정보 중개하므로 shippingAddress 제거
         shippingFee: 3000,
         finalAmount: totalAmount + 3000
       }
 
-      // SSDM JWT 정보 준비
+      // SSDM JWT 정보 준비 - 팝업에서 받은 JWT 사용
       let jwtToStore: string | undefined = undefined
       
-      if (useSSDM) {
-        // 이미 이전에 항상 동의한 사용자인지 확인
-        if (consentStatus.autoConsent) {
-          // 항상 동의 사용자: 주문 시 JWT 발급 요청
-          try {
-            const newJWT = await requestNewJWTForDelivery()
-            if (newJWT) {
-              jwtToStore = newJWT
-              console.log('항상 동의 사용자 JWT 발급 성공')
-            }
-          } catch (error) {
-            console.error('항상 동의 사용자 JWT 발급 실패:', error)
-            // JWT 발급 실패해도 주문은 계속 진행
-          }
-        } else {
-          // 새롭게 연결해서 동의한 사용자: 이미 받은 JWT 사용
-          const existingJWT = localStorage.getItem('ssdm_jwt')
-          if (existingJWT) {
-            jwtToStore = existingJWT
-            // JWT 사용 후 삭제
-            localStorage.removeItem('ssdm_jwt')
-            setSSMDJWT(null)
-            console.log('새로 동의한 사용자 JWT 사용')
-          }
-        }
+      if (useSSDM && ssdmJWT) {
+        // 팝업에서 받은 배송용 JWT 그대로 사용
+        jwtToStore = ssdmJWT
+        console.log('팝업에서 받은 배송용 JWT 사용:', ssdmJWT)
       }
 
       // 주문 처리 (JWT 정보 포함)
@@ -522,42 +488,6 @@ function CheckoutContent() {
     }
   }
 
-  // 주문용 JWT 발급 요청 함수 (항상 허용 사용자용)
-  const requestNewJWTForDelivery = async (): Promise<string | null> => {
-    try {
-      if (!user) return null
-      
-      // 이메일에서 shopId 추출
-      const emailParts = user.email?.split('@') || []
-      const shopId = emailParts[0] || user.uid
-      
-      // mallId 가져오기
-      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
-      const mallId = PRIVACY_CONFIG.mallId
-      
-      // SSDM API를 통해 주문용 JWT 발급 요청
-      const response = await fetch('/api/ssdm/connect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          shopId,
-          mallId
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        return data.jwt || null
-      }
-      
-      return null
-    } catch (error) {
-      console.error('주문용 JWT 발급 요청 실패:', error)
-      return null
-    }
-  }
 
   if (loading) {
     return (

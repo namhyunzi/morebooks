@@ -10,6 +10,7 @@ export interface CartItem {
 }
 
 export interface Order {
+  id?: string // 주문 ID (Firebase에서 자동 생성)
   shopId: string // 이메일 앞부분, SSDM에서 사용자 식별 가능
   items: {
     bookId: string
@@ -24,13 +25,7 @@ export interface Order {
   status: 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
   paymentMethod: 'bank_transfer'
   paymentStatus: 'pending' | 'completed'
-  shippingAddress: {
-    name: string
-    phone: string
-    address: string
-    detailAddress: string
-    zipCode: string
-  }
+  // SSDM에서 개인정보 중개하므로 shippingAddress 제거
   createdAt: string
   updatedAt: string
   bankAccount?: {
@@ -210,7 +205,7 @@ export const getUserOrders = async (userId: string): Promise<Order[]> => {
     
     if (snapshot.exists()) {
       const orders = snapshot.val()
-      return Object.values(orders).filter((order: any) => order.userId === userId)
+      return Object.values(orders).filter((order: any) => order.userId === userId) as Order[]
     }
     return []
   } catch (error) {
