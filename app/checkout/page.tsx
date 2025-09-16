@@ -720,7 +720,7 @@ function CheckoutContent() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        className="bg-white bg-opacity-20 text-white border-white hover:bg-white hover:text-gray-800 text-xs"
+                        className="bg-white text-green-500 border-white hover:bg-gray-100 hover:text-green-600 text-xs"
                         onClick={openPreview}
                       >
                         제공된 정보 확인
