@@ -87,14 +87,13 @@ export async function connectToSSDM(
       expiresIn: jwtResult.expiresIn
     })
     
-    // SSDM 연결 URL 생성 (JWT만 URL 파라미터로 전달 - JWT 안에 shopId, mallId, API key, 공개키 등 모든 정보 포함)
+    // SSDM 연결 URL 생성 (JWT 없이 깔끔한 URL)
     const baseUrl = SSDM_CONFIG.baseUrl
-    const url = new URL(`${baseUrl}/consent`)
-    url.searchParams.set('jwt', jwtResult.jwt)
+    const url = `${baseUrl}/consent`
     
-    // 팝업으로 SSDM 페이지 열기 (원래 크기 유지)
+    // 팝업으로 SSDM 페이지 열기
     const popup = window.open(
-      url.toString(),
+      url,
       'consent',
       'width=500,height=600'
     )
@@ -104,14 +103,23 @@ export async function connectToSSDM(
       return null
     }
     
+    // 팝업이 로드되면 postMessage로 JWT 전달
+    const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
+    popup.addEventListener('load', () => {
+      popup.postMessage({
+        type: 'init_consent',
+        jwt: jwtResult.jwt
+      }, ssdmOrigin)
+    })
+    
     // SSDM 도메인에서 오는 메시지 리스너 추가
     const messageHandler = (event: MessageEvent) => {
       // 보안: SSDM 도메인에서만 메시지 수신 허용
       const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
-      if (event.origin !== ssdmOrigin) {
+      if ((event as any).origin !== ssdmOrigin) {
         console.log("ssdmOrigin확인", ssdmOrigin);
-        console.log("event.origin 확인",event.origin);
-        console.warn('신뢰할 수 없는 도메인에서 메시지 수신:', event.origin)
+        console.log("event.origin 확인", (event as any).origin);
+        console.warn('신뢰할 수 없는 도메인에서 메시지 수신:', (event as any).origin)
         return
       }
       

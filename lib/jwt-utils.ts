@@ -1,15 +1,15 @@
 import jwt from 'jsonwebtoken'
 
-export function generateJWT(payload: any, privateKey: string): string {
+export function generateJWT(payload: any, apiKey: string): string {
   try {
     console.log('JWT 생성 시작:', {
       payloadKeys: Object.keys(payload),
-      privateKeyLength: privateKey.length,
-      privateKeyStart: privateKey.substring(0, 50) + '...'
+      apiKeyLength: apiKey.length,
+      apiKeyStart: apiKey.substring(0, 20) + '...'
     })
     
-    const token = jwt.sign(payload, privateKey, {
-      algorithm: 'RS256',
+    const token = jwt.sign(payload, apiKey, {
+      algorithm: 'HS256',
       expiresIn: '5m' // 5분
     })
     
@@ -27,10 +27,10 @@ export function generateJWT(payload: any, privateKey: string): string {
   }
 }
 
-export function verifyJWT(token: string, publicKey: string): any {
+export function verifyJWT(token: string, apiKey: string): any {
   try {
-    const decoded = jwt.verify(token, publicKey, {
-      algorithms: ['RS256']
+    const decoded = jwt.verify(token, apiKey, {
+      algorithms: ['HS256']
     })
     return decoded
   } catch (error) {

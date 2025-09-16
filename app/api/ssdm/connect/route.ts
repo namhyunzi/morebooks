@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateJWT } from '@/lib/jwt-utils'
-import { getKeyPair, formatPublicKeyForJWT } from '@/lib/key-utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,35 +14,28 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('환경변수 확인:', {
-      SHOP_PUBLIC_KEY: process.env.SHOP_PUBLIC_KEY ? '설정됨' : '없음',
-      SHOP_PRIVATE_KEY: process.env.SHOP_PRIVATE_KEY ? '설정됨' : '없음',
       PRIVACY_SYSTEM_API_KEY: process.env.PRIVACY_SYSTEM_API_KEY ? '설정됨' : '없음'
     })
 
-    // 쇼핑몰용 키 쌍 가져오기
-    console.log('키 쌍 가져오기 시도...')
-    const { publicKey, privateKey } = getKeyPair()
-    console.log('키 쌍 가져오기 성공')
-
-    // API 키 (기존 설정된 키 사용)
-    const apiKey = process.env.PRIVACY_SYSTEM_API_KEY || process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY || 'abc123'
-
-    // JWT 페이로드에 공개키 포함
-    const formattedPublicKey = formatPublicKeyForJWT(publicKey)
+    // API 키 (Vercel 환경변수에서 가져오기)
+    const apiKey = process.env.PRIVACY_SYSTEM_API_KEY
     
-    // JWT 생성 (RSA 개인키 사용)
+    if (!apiKey) {
+      return NextResponse.json({ 
+        error: 'PRIVACY_SYSTEM_API_KEY environment variable is not set' 
+      }, { status: 500 })
+    }
+    
+    // JWT 생성 (API Key로 서명)
     const jwt = generateJWT({ 
       shopId, 
-      mallId, 
-      apiKey,
-      publicKey: formattedPublicKey
-    }, privateKey)
+      mallId
+    }, apiKey)
     
     console.log('JWT 생성 완료:', {
       shopId,
       mallId,
       apiKey,
-      publicKeyLength: formattedPublicKey.length,
       jwtLength: jwt.length
     })
     
@@ -53,8 +45,6 @@ export async function POST(request: NextRequest) {
       jwt,
       shopId,
       mallId,
-      apiKey,
-      publicKey: formattedPublicKey,
       expiresIn: 5 * 60 // 5분 (초 단위)
     })
 
@@ -71,8 +61,6 @@ export async function POST(request: NextRequest) {
       details: errorMessage,
       stack: errorStack,
       debug: {
-        hasPublicKey: !!process.env.SHOP_PUBLIC_KEY,
-        hasPrivateKey: !!process.env.SHOP_PRIVATE_KEY,
         hasApiKey: !!process.env.PRIVACY_SYSTEM_API_KEY
       }
     }, { status: 500 })

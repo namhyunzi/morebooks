@@ -10,8 +10,7 @@ export interface CartItem {
 }
 
 export interface Order {
-  id: string
-  userId: string
+  shopId: string // 이메일 앞부분, SSDM에서 사용자 식별 가능
   items: {
     bookId: string
     title: string
@@ -39,6 +38,10 @@ export interface Order {
     accountNumber: string
     accountHolder: string
   }
+  // SSDM 관련 필드
+  ssdmJWT?: string // SSDM에서 받은 JWT 토큰
+  isDepositReceived: boolean // 입금 여부 (기본값: true로 설정)
+  isCancelled: boolean // 취소 여부 (기본값: false)
 }
 
 export interface UserProfile {
@@ -347,7 +350,12 @@ export const getBankAccount = (bankCode: string): BankAccount | null => {
 }
 
 // 무통장입금 주문 처리 (주문과 동시에 결제완료 처리)
-export const processBankTransferOrder = async (orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>, bankCode: string, depositorName: string) => {
+export const processBankTransferOrder = async (
+  orderData: Omit<Order, 'createdAt' | 'updatedAt' | 'isDepositReceived' | 'isCancelled'>, 
+  bankCode: string, 
+  depositorName: string,
+  ssdmJWT?: string
+) => {
   try {
     // 은행 계좌 정보 조회
     const bankAccount = getBankAccount(bankCode)
@@ -361,14 +369,16 @@ export const processBankTransferOrder = async (orderData: Omit<Order, 'id' | 'cr
     
     const order: Order = {
       ...orderData,
-      id: newOrderRef.key!,
       status: 'paid', // 주문과 동시에 결제완료
       paymentStatus: 'completed', // 결제완료 상태
+      isDepositReceived: true, // 무조건 입금 받았다고 가정
+      isCancelled: false, // 취소되지 않음
       bankAccount: {
         bankName: bankAccount.bankName,
         accountNumber: bankAccount.accountNumber,
         accountHolder: bankAccount.accountHolder
       },
+      ssdmJWT: ssdmJWT, // SSDM JWT 저장
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -376,9 +386,9 @@ export const processBankTransferOrder = async (orderData: Omit<Order, 'id' | 'cr
     await set(newOrderRef, order)
 
     // 결제 내역 저장
-    const paymentRef = ref(realtimeDb, `payments/${order.id}`)
+    const paymentRef = ref(realtimeDb, `payments/${newOrderRef.key}`)
     await set(paymentRef, {
-      orderId: order.id,
+      orderId: newOrderRef.key,
       paymentMethod: 'bank_transfer',
       paymentStatus: 'completed',
       amount: order.totalAmount,
@@ -388,7 +398,7 @@ export const processBankTransferOrder = async (orderData: Omit<Order, 'id' | 'cr
       createdAt: new Date().toISOString()
     })
     
-    return { success: true, orderId: order.id, bankAccount }
+    return { success: true, orderId: newOrderRef.key, bankAccount }
   } catch (error) {
     console.error('무통장입금 주문 처리 에러:', error)
     return { success: false, error }
