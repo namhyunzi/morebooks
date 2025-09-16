@@ -107,39 +107,57 @@ export async function connectToSSDM(
     const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
     console.log("ssdmOrigin 팝업열떄 ",ssdmOrigin);
     
-    // 팝업 열자마자 즉시 JWT 전송
-    console.log('팝업 열자마자 JWT 전송 시작');
-    console.log('전송할 JWT:', jwtResult.jwt.substring(0, 50) + '...');
-    console.log('전송할 targetOrigin:', ssdmOrigin);
-    
-    try {
-      popup.postMessage({
-        type: 'init_consent',
-        jwt: jwtResult.jwt
-      }, ssdmOrigin)
-      console.log('JWT 전송 성공');
-    } catch (error) {
-      console.error('JWT 전송 실패:', error);
+    // 팝업이 로드 완료된 후 JWT 전송
+    const sendJWT = () => {
+      console.log('팝업 로드 완료, JWT 전송 시작');
+      console.log('전송할 JWT:', jwtResult.jwt.substring(0, 50) + '...');
+      console.log('전송할 targetOrigin:', ssdmOrigin);
+      
+      try {
+        popup.postMessage({
+          type: 'init_consent',
+          jwt: jwtResult.jwt
+        }, ssdmOrigin)
+        console.log('JWT 전송 성공');
+      } catch (error) {
+        console.error('JWT 전송 실패:', error);
+      }
     }
+    
+    // 팝업이 준비될 시간을 주고 JWT 전송 (cross-origin 문제 해결)
+    setTimeout(() => {
+      if (!popup.closed) {
+        sendJWT();
+      }
+    }, 1000);
+    
+    // 백업으로 더 긴 시간 후에도 시도
+    setTimeout(() => {
+      if (!popup.closed) {
+        sendJWT();
+      }
+    }, 3000);
     
     // SSDM 도메인에서 오는 메시지 리스너 추가
     const messageHandler = (event: MessageEvent) => {
-      // 보안: SSDM 도메인에서만 메시지 수신 허용
-      const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
-      console.log("팝업 닫을떄 ssdmOrigin확인", ssdmOrigin);
-      console.log("팝업 닫을떄 event.origin 확인", event.origin);
-      
-      // 개발 환경에서는 더 유연한 검증 (실제 배포 시에는 엄격하게)
-      const isAllowedOrigin = event.origin === ssdmOrigin || 
-                             event.origin.includes('ssmd-smoky.vercel.app') ||
-                             event.origin.includes('localhost')
-      
-      if (!isAllowedOrigin) {
-        console.warn('신뢰할 수 없는 도메인에서 메시지 수신:', event.origin)
-        return
+      // SSDM 관련 메시지만 처리 (타입으로 먼저 필터링)
+      if (!event.data || event.data.type !== 'consent_result') {
+        return; // SSDM 메시지가 아니면 조용히 무시
       }
       
-      console.log('SSDM에서 메시지 수신:', event.data)
+      // 보안: SSDM 도메인에서만 메시지 수신 허용
+      const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin;
+      
+      // 개발 환경에서는 더 유연한 검증 (실제 배포 시에는 엄격하게)
+      const isAllowedOrigin = (event as any).origin === ssdmOrigin || 
+                             (event as any).origin.includes('ssmd-smoky.vercel.app') ||
+                             (event as any).origin.includes('localhost');
+      
+      if (!isAllowedOrigin) {
+        return; // 로그 없이 조용히 무시
+      }
+      
+      console.log('SSDM에서 메시지 수신:', event.data);
       
       // 동의 결과 처리
       if (event.data.type === 'consent_result') {
