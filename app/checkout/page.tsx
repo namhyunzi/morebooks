@@ -50,6 +50,11 @@ function CheckoutContent() {
   const [ssdmUID, setSSMDUID] = useState<string | null>(null)
   const [ssdmConnected, setSSMDConnected] = useState(false)
   const [ssdmPopup, setSSMDPopup] = useState<Window | null>(null)
+  const [consentStatus, setConsentStatus] = useState({
+    isConnected: false,
+    autoConsent: false,
+    expiresAt: null as string | null
+  })
   
   // 개인정보 입력 방식 선택 상태
   const [useSSDM, setUseSSDM] = useState(false)
@@ -75,6 +80,7 @@ function CheckoutContent() {
     }
 
     loadCartItems()
+    checkConsentStatus() // SSDM 상태 확인 추가
     
     // 앱에서 돌아온 데이터 확인
     if (searchParams) {
@@ -85,6 +91,7 @@ function CheckoutContent() {
 
     // 팝업에서 오는 메시지 리스너 등록
     const handleMessage = (event: MessageEvent) => {
+    console.log("메세지 받음", event.data);
       if (event.data.type === 'consent_result') {
         if (event.data.agreed) {
           localStorage.setItem('ssdm_connected', 'true')
@@ -156,6 +163,42 @@ function CheckoutContent() {
       } catch (error) {
         console.error('앱 데이터 파싱 오류:', error)
       }
+    }
+  }
+
+  const checkConsentStatus = async () => {
+    if (!user) return
+    
+    try {
+      // 이메일에서 shopId 추출
+      const emailParts = user.email?.split('@') || []
+      const shopId = emailParts[0] || user.uid
+      
+      // mallId 가져오기
+      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
+      const mallId = PRIVACY_CONFIG.mallId
+      
+      const response = await fetch(`/api/check-consent-status?shopId=${shopId}&mallId=${mallId}`)
+      const status = await response.json()
+      
+      if (status.isConnected) {
+        setConsentStatus(status)
+        
+        if (status.autoConsent) {
+          // 항상 동의 상태면 자동으로 SSDM 방식 선택
+          setUseSSDM(true)
+          setUseManualInput(false)
+          setSSMDConnected(true)
+        } else {
+          // 연결됐지만 수동 동의면 SSDM 방식만 활성화
+          setUseSSDM(true)
+          setUseManualInput(false)
+          setSSMDConnected(true)
+        }
+      }
+    } catch (error) {
+      console.error('SSDM 상태 확인 실패:', error)
+      // 실패해도 계속 진행 (기본값 유지)
     }
   }
 
@@ -284,6 +327,39 @@ function CheckoutContent() {
   const handleAppDownload = async () => {
     // 기존 앱 다운로드 함수 (호환성 유지)
     await handleSSMDConnect()
+  }
+
+  // 미리보기 팝업 열기 함수
+  const openPreview = async () => {
+    if (!user) return
+    
+    try {
+      // 이메일에서 shopId 추출
+      const emailParts = user.email?.split('@') || []
+      const shopId = emailParts[0] || user.uid
+      
+      // mallId 가져오기
+      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
+      const mallId = PRIVACY_CONFIG.mallId
+      
+      // SSDM 미리보기 URL 생성
+      const ssdmBaseUrl = process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || 'https://ssmd-smoky.vercel.app'
+      const previewUrl = `${ssdmBaseUrl}/info-preview?mallId=${mallId}&shopId=${shopId}`
+      
+      // 팝업으로 미리보기 열기
+      const popup = window.open(
+        previewUrl,
+        'ssdm-preview',
+        'width=500,height=600,scrollbars=yes,resizable=yes'
+      )
+      
+      if (!popup) {
+        toast.error('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
+      }
+    } catch (error) {
+      console.error('미리보기 열기 실패:', error)
+      toast.error('미리보기를 열 수 없습니다.')
+    }
   }
 
 
@@ -602,7 +678,9 @@ function CheckoutContent() {
                 <div className={`rounded-lg p-4 text-white transition-all ${
                   useSSDM 
                     ? ssdmConnected 
-                      ? 'bg-gradient-to-r from-green-500 to-green-600' 
+                      ? consentStatus.autoConsent
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600' // 항상 동의
+                        : 'bg-gradient-to-r from-green-500 to-green-600' // 수동 동의
                       : 'bg-gradient-to-r from-[#A2B38B] to-[#8fa076]'
                     : 'bg-gray-200 opacity-50'
                 }`}>
@@ -610,10 +688,17 @@ function CheckoutContent() {
                     <Smartphone className="w-6 h-6" />
                     <div className="flex-1">
                       {ssdmConnected ? (
-                        <>
-                          <h4 className="font-semibold text-sm">개인정보 보호 시스템 연결 완료!</h4>
-                          <p className="text-xs opacity-90 mt-1">안전한 배송을 위해 택배사에 임시 권한이 부여됩니다.</p>
-                        </>
+                        consentStatus.autoConsent ? (
+                          <>
+                            <h4 className="font-semibold text-sm">개인정보 보호 시스템 자동 동의 중</h4>
+                            <p className="text-xs opacity-90 mt-1">6개월간 자동으로 개인정보가 제공됩니다.</p>
+                          </>
+                        ) : (
+                          <>
+                            <h4 className="font-semibold text-sm">개인정보 보호 시스템 연결 완료!</h4>
+                            <p className="text-xs opacity-90 mt-1">안전한 배송을 위해 택배사에 임시 권한이 부여됩니다.</p>
+                          </>
+                        )
                       ) : (
                         <>
                           <h4 className="font-semibold text-sm">개인정보 보호 시스템으로 안전하게 주문하세요!</h4>
@@ -632,8 +717,18 @@ function CheckoutContent() {
                       </Button>
                     )}
                     {useSSDM && ssdmConnected && (
-                      <div className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded">
-                        연결됨
+                      <div className="flex items-center space-x-2">
+                        <div className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded">
+                          {consentStatus.autoConsent ? '자동 동의' : '연결됨'}
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="bg-white bg-opacity-20 text-white border-white hover:bg-white hover:text-gray-800 text-xs"
+                          onClick={openPreview}
+                        >
+                          정보 확인
+                        </Button>
                       </div>
                     )}
                   </div>

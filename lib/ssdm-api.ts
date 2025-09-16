@@ -21,7 +21,7 @@ export interface SSDMResponse {
 
 // SSDM 시스템 설정 - 클라이언트용 (API Key는 서버사이드에서만 사용)
 export const SSDM_CONFIG: SSDMConfig = {
-  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || 'https://ssdm-demo.vercel.app', // 클라이언트용
+  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || 'https://ssmd-smoky.vercel.app/', // 클라이언트용
   // apiKey는 서버사이드에서만 사용
 }
 
@@ -109,6 +109,8 @@ export async function connectToSSDM(
       // 보안: SSDM 도메인에서만 메시지 수신 허용
       const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
       if (event.origin !== ssdmOrigin) {
+        console.log("ssdmOrigin확인", ssdmOrigin);
+        console.log("event.origin 확인",event.origin);
         console.warn('신뢰할 수 없는 도메인에서 메시지 수신:', event.origin)
         return
       }
