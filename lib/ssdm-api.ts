@@ -107,7 +107,7 @@ export async function connectToSSDM(
     const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
     console.log("ssdmOrigin 팝업열떄 ",ssdmOrigin);
     
-    // 즉시 JWT 전송 (팝업 열자마자)
+    // 팝업 열자마자 즉시 JWT 전송
     console.log('팝업 열자마자 JWT 전송 시작');
     console.log('전송할 JWT:', jwtResult.jwt.substring(0, 50) + '...');
     console.log('전송할 targetOrigin:', ssdmOrigin);
@@ -186,7 +186,7 @@ export async function connectToSSDM(
       }
     }, 1000)
     
-    console.log('SSDM 연결 페이지 열림 (JWT는 URL 파라미터로 전달됨):', url.toString())
+    console.log('SSDM 연결 페이지 열림 (JWT는 postMessage로 전달됨):', url.toString())
     return popup
     
   } catch (error) {
