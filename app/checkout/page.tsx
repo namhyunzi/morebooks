@@ -38,7 +38,7 @@ function CheckoutContent() {
   const searchParams = useSearchParams()
   const [cartItems, setCartItems] = useState<CartItemWithBook[]>([])
   const [loading, setLoading] = useState(true)
-  const [paymentMethod, setPaymentMethod] = useState("bank_transfer")
+  const [paymentMethod, setPaymentMethod] = useState("bank-transfer")
   const [selectedCard, setSelectedCard] = useState("")
   const [selectedBank, setSelectedBank] = useState("")
   const [depositorName, setDepositorName] = useState("")
