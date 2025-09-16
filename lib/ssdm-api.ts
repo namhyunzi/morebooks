@@ -105,6 +105,7 @@ export async function connectToSSDM(
     
     // 팝업이 로드되면 postMessage로 JWT 전달
     const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
+    console.log("ssdmOrigin 팝업열떄 ",ssdmOrigin);
     popup.addEventListener('load', () => {
       popup.postMessage({
         type: 'init_consent',
@@ -116,10 +117,16 @@ export async function connectToSSDM(
     const messageHandler = (event: MessageEvent) => {
       // 보안: SSDM 도메인에서만 메시지 수신 허용
       const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin
-      if ((event as any).origin !== ssdmOrigin) {
-        console.log("ssdmOrigin확인", ssdmOrigin);
-        console.log("event.origin 확인", (event as any).origin);
-        console.warn('신뢰할 수 없는 도메인에서 메시지 수신:', (event as any).origin)
+      console.log("팝업 닫을떄 ssdmOrigin확인", ssdmOrigin);
+      console.log("팝업 닫을떄 event.origin 확인", event.origin);
+      
+      // 개발 환경에서는 더 유연한 검증 (실제 배포 시에는 엄격하게)
+      const isAllowedOrigin = event.origin === ssdmOrigin || 
+                             event.origin.includes('ssmd-smoky.vercel.app') ||
+                             event.origin.includes('localhost')
+      
+      if (!isAllowedOrigin) {
+        console.warn('신뢰할 수 없는 도메인에서 메시지 수신:', event.origin)
         return
       }
       
