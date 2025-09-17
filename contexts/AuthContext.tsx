@@ -89,6 +89,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe()
   }, [])
 
+  const checkUserAgreements = async (userId: string) => {
+    try {
+      const { ref, get } = await import('firebase/database')
+      const { realtimeDb } = await import('@/lib/firebase')
+      
+      const agreementsRef = ref(realtimeDb, `users/${userId}/agreements`)
+      const snapshot = await get(agreementsRef)
+      
+      if (snapshot.exists()) {
+        const agreements = snapshot.val()
+        // 필수 약관 (termsAccepted, privacyAccepted)이 모두 true인지 확인
+        return agreements.termsAccepted === true && agreements.privacyAccepted === true
+      }
+      return false
+    } catch (error) {
+      console.error('약관동의 확인 실패:', error)
+      return false
+    }
+  }
+
   const loadCartCount = async (userId: string) => {
     try {
       const { getCartItems } = await import('@/lib/firebase-realtime')
@@ -195,22 +215,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createdAt: serverTimestamp()
       })
       
-      // 약관동의 정보 저장
-      const agreementsData: any = {
+      // 약관동의 정보 저장 (단일 동의 날짜)
+      const agreementsData = {
         termsAccepted: agreements.termsAccepted,
         privacyAccepted: agreements.privacyAccepted,
-        marketingAccepted: agreements.marketingAccepted
-      }
-      
-      // 동의한 약관에만 타임스탬프 추가
-      if (agreements.termsAccepted) {
-        agreementsData.termsAcceptedAt = serverTimestamp()
-      }
-      if (agreements.privacyAccepted) {
-        agreementsData.privacyAcceptedAt = serverTimestamp()
-      }
-      if (agreements.marketingAccepted) {
-        agreementsData.marketingAcceptedAt = serverTimestamp()
+        marketingAccepted: agreements.marketingAccepted,
+        agreedAt: serverTimestamp() // 단일 동의 날짜
       }
       
       await set(ref(realtimeDb, `users/${userId}/agreements`), agreementsData)

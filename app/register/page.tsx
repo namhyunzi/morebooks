@@ -145,22 +145,12 @@ export default function RegisterPage() {
         createdAt: serverTimestamp()
       })
       
-      // 약관동의 정보 저장
-      const agreementsData: any = {
+      // 약관동의 정보 저장 (단일 동의 날짜)
+      const agreementsData = {
         termsAccepted: agreements.termsAccepted,
         privacyAccepted: agreements.privacyAccepted,
-        marketingAccepted: agreements.marketingAccepted
-      }
-      
-      // 동의한 약관에만 타임스탬프 추가
-      if (agreements.termsAccepted) {
-        agreementsData.termsAcceptedAt = serverTimestamp()
-      }
-      if (agreements.privacyAccepted) {
-        agreementsData.privacyAcceptedAt = serverTimestamp()
-      }
-      if (agreements.marketingAccepted) {
-        agreementsData.marketingAcceptedAt = serverTimestamp()
+        marketingAccepted: agreements.marketingAccepted,
+        agreedAt: serverTimestamp() // 단일 동의 날짜
       }
       
       await set(agreementsRef, agreementsData)
