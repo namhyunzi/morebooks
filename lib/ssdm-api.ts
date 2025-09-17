@@ -95,7 +95,7 @@ export async function connectToSSDM(
     const popup = window.open(
       url,
       'consent',
-      'width=500,height=600'
+      'width=560,height=770'
     )
     
     if (!popup) {
