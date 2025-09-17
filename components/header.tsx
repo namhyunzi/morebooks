@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
 
 export default function Header() {
-  const { user, logout, cartItemCount, isTermsAgreed } = useAuth()
+  const { user, logout, cartItemCount } = useAuth()
 
   // 디버깅용 로그
   console.log('Header - cartItemCount:', cartItemCount)
@@ -24,7 +24,7 @@ export default function Header() {
       <div className="bg-white text-gray-600 border-b border-gray-200">
         <div className="container mx-auto px-4 py-2 max-w-6xl">
           <div className="flex items-center justify-end text-sm space-x-6">
-            {user && isTermsAgreed ? (
+            {user ? (
               <>
                 <span className="text-[#A2B38B]">
                   {user.displayName || (user.email ? user.email.split('@')[0] : '')}님 환영합니다

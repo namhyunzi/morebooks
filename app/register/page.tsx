@@ -217,15 +217,24 @@ export default function RegisterPage() {
 
     try {
       const userCredential = await register(email, password)
+      console.log('회원가입 결과:', userCredential)
+      console.log('userCredential?.user?.uid:', userCredential?.user?.uid)
+      
       // 회원가입 성공 후 약관동의 정보 저장
       if (userCredential?.user?.uid) {
+        console.log('회원가입 성공 - 약관동의 정보 저장 시작:', userCredential.user.uid)
         await saveUserAgreements(userCredential.user.uid, email, {
           termsAccepted,
           privacyAccepted,
           marketingAccepted
         })
+        console.log('약관동의 정보 저장 완료')
+        
+      } else {
+        console.log('userCredential?.user?.uid가 없음')
       }
-      router.push('/')
+      // 페이지 새로고침으로 상태 업데이트 강제
+      window.location.href = '/'
     } catch (error: any) {
       setError(error.message)
     } finally {
@@ -290,14 +299,17 @@ export default function RegisterPage() {
       setLoading(true)
       
       // 약관동의 정보를 Realtime Database에 저장
+      console.log('구글 회원가입 - 약관동의 정보 저장 시작:', pendingGoogleUser.user.uid)
       await saveUserAgreements(pendingGoogleUser.user.uid, pendingGoogleUser.user.email || '', agreements)
+      console.log('구글 회원가입 - 약관동의 정보 저장 완료')
+      
       
       // 모달 닫기
       setShowTermsModal(false)
       setPendingGoogleUser(null)
       
-      // 메인 페이지로 이동
-      router.push('/')
+      // 페이지 새로고침으로 상태 업데이트 강제
+      window.location.href = '/'
       
     } catch (error: any) {
       setError(error.message)

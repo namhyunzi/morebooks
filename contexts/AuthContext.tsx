@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
 // Window 객체에 googleAuthPopup 속성 추가
 declare global {
@@ -64,12 +64,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [cartItemCount, setCartItemCount] = useState(0)
-  const [isTermsAgreed, setIsTermsAgreed] = useState<boolean>(false)
   
   // 개인정보 시스템 연동 상태
   const [privacyUID, setPrivacyUID] = useState<string | null>(null)
   const [privacyJWT, setPrivacyJWT] = useState<string | null>(null)
   const [consentStatus, setConsentStatus] = useState<'none' | 'pending' | 'allowed' | 'denied'>('none')
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -77,37 +77,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false)
       if (user) {
         loadCartCount(user.uid)
-        // 약관 동의 상태 확인
-        const termsAgreed = await checkUserAgreements(user.uid)
-        setIsTermsAgreed(termsAgreed)
       } else {
         setCartItemCount(0)
-        setIsTermsAgreed(false)
       }
     })
 
     return () => unsubscribe()
   }, [])
-
-  const checkUserAgreements = async (userId: string) => {
-    try {
-      const { ref, get } = await import('firebase/database')
-      const { realtimeDb } = await import('@/lib/firebase')
-      
-      const agreementsRef = ref(realtimeDb, `users/${userId}/agreements`)
-      const snapshot = await get(agreementsRef)
-      
-      if (snapshot.exists()) {
-        const agreements = snapshot.val()
-        // 필수 약관 (termsAccepted, privacyAccepted)이 모두 true인지 확인
-        return agreements.termsAccepted === true && agreements.privacyAccepted === true
-      }
-      return false
-    } catch (error) {
-      console.error('약관동의 확인 실패:', error)
-      return false
-    }
-  }
 
   const loadCartCount = async (userId: string) => {
     try {
@@ -363,11 +339,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
 
+
   const value = {
     user,
     loading,
     cartItemCount,
-    isTermsAgreed,
     // 개인정보 시스템 연동 상태
     privacyUID,
     privacyJWT,
