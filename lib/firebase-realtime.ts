@@ -11,7 +11,7 @@ export interface CartItem {
 
 export interface Order {
   id?: string // 주문 ID (Firebase에서 자동 생성)
-  shopId: string // 이메일 앞부분, SSDM에서 사용자 식별 가능
+  userId: string // Firebase Auth 사용자 ID
   items: {
     bookId: string
     title: string
@@ -21,7 +21,9 @@ export interface Order {
     quantity: number
     image: string
   }[]
-  totalAmount: number
+  totalAmount: number // 상품 금액
+  shippingFee: number // 배송비
+  finalAmount: number // 최종 결제 금액 (상품금액 + 배송비)
   status: 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
   paymentMethod: 'bank_transfer'
   paymentStatus: 'pending' | 'completed'
@@ -34,7 +36,7 @@ export interface Order {
     accountHolder: string
   }
   // SSDM 관련 필드
-  ssdmJWT?: string // SSDM에서 받은 JWT 토큰
+  ssdmJWT?: string // SSDM에서 받은 JWT 토큰 (JWT 안에 shopId, mallId 포함)
   isDepositReceived: boolean // 입금 여부 (기본값: true로 설정)
   isCancelled: boolean // 취소 여부 (기본값: false)
 }

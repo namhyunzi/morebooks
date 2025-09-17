@@ -1,0 +1,58 @@
+**SSDM 측 전달**
+정보제공 동의시 쇼핑몰에 전달될 데이터 
+{
+  isActive: true,           // 동의 상태 (agreed → isActive로 통일)
+  consentType: "once",      // 동의방식 ("once" 또는 "always")
+  jwt: "eyJhbGciOiJIUzI1NiIs...",  // 택배사용 JWT 토큰
+  timestamp: "2024-01-01T00:00:00Z"  // 동의 시간
+}
+
+배송용jwt 
+const jwtPayload = {
+  shopId: shopId,
+  mallId: mallId,
+  consentType: consentData.consentType,
+  purpose: "delivery",
+  allowedDomains: ["delivery1.company.com", "delivery2.company.com", "delivery3.company.com"], // ← 추가
+  timestamp: new Date().toISOString(),
+  exp: Math.floor(Date.now() / 1000) + (15 * 60)
+}
+
+**문제점**
+택배사에 jwt 전달, 그러면 별도의 apikey가 필요 -> 수정 필요
+
+** 쇼핑몰에서 주문하기 클릭시 저장되는 테이블구조**
+{
+  "orders": {
+    "ORD-20241201-001": {
+      "userId": "firebase-user-uid-12345",
+      "items": [
+        {
+          "bookId": "book-001",
+          "title": "책 제목",
+          "author": "저자명",
+          "price": 15000,           // 정가
+          "discountPrice": 13500,   // 할인가
+          "quantity": 2,
+          "image": "book-cover.jpg"
+        }
+      ],
+      "totalAmount": 27000,         // 총 주문 금액 (할인가 × 수량의 합계)
+      "shippingFee": 0,             // 배송비 (무료로 고정)
+      "finalAmount": 27000,         // 최종 결제 금액 (totalAmount + shippingFee)
+      "status": "paid",
+      "paymentMethod": "bank_transfer",
+      "paymentStatus": "completed",
+      "bankAccount": {
+        "bankName": "국민은행",
+        "accountNumber": "123-456-789",
+        "accountHolder": "홍길동"
+      },
+      "ssdmJWT": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",  // SSDM JWT 토큰
+      "isDepositReceived": true,    // 입금 여부 (무통장입금이므로 true)
+      "isCancelled": false,         // 취소 여부
+      "createdAt": "2024-12-01T10:30:00.000Z",
+      "updatedAt": "2024-12-01T10:30:00.000Z"
+    }
+  }
+}

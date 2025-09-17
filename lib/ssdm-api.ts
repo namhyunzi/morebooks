@@ -140,11 +140,6 @@ export async function connectToSSDM(
     
     // SSDM 도메인에서 오는 메시지 리스너 추가
     const messageHandler = (event: MessageEvent) => {
-      // SSDM 관련 메시지만 처리 (타입으로 먼저 필터링)
-      if (!event.data || event.data.type !== 'consent_result') {
-        return; // SSDM 메시지가 아니면 조용히 무시
-      }
-      
       // 보안: SSDM 도메인에서만 메시지 수신 허용
       const ssdmOrigin = new URL(SSDM_CONFIG.baseUrl).origin;
       
@@ -159,11 +154,11 @@ export async function connectToSSDM(
       
       console.log('SSDM에서 메시지 수신:', event.data);
       
-      // 동의 결과 처리
-      if (event.data.type === 'consent_result') {
-        const { agreed, consentType, jwt } = event.data
+      // SSDM 동의 결과 처리 (isActive 필드로 판단)
+      if (event.data && typeof event.data.isActive !== 'undefined') {
+        const { isActive, consentType, jwt } = event.data
         
-        console.log('SSDM 동의 결과:', { agreed, consentType })
+        console.log('SSDM 동의 결과:', { isActive, consentType })
         
         // 팝업 닫기
         if (popup && !popup.closed) {
@@ -175,12 +170,12 @@ export async function connectToSSDM(
         
         // 콜백 함수 호출
         if (onConsentResult) {
-          onConsentResult({ agreed, consentType, jwt })
+          onConsentResult({ agreed: isActive, consentType, jwt })
         }
       }
       
       // 팝업 닫기 요청 처리
-      if (event.data.type === 'close_popup') {
+      if (event.data && event.data.type === 'close_popup') {
         console.log('SSDM에서 팝업 닫기 요청')
         
         if (popup && !popup.closed) {

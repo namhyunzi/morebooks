@@ -92,8 +92,9 @@ function CheckoutContent() {
     // 팝업에서 오는 메시지 리스너 등록
     const handleMessage = (event: MessageEvent) => {
     console.log("메세지 받음", event.data);
-      if (event.data.type === 'consent_result') {
-        if (event.data.agreed) {
+      // SSDM 동의 결과 처리 (isActive 필드로 판단)
+      if (event.data && typeof event.data.isActive !== 'undefined') {
+        if (event.data.isActive) {
           localStorage.setItem('ssdm_connected', 'true')
           if (event.data.jwt) {
             // "이번만 허용" 사용자 → JWT 저장
@@ -118,7 +119,7 @@ function CheckoutContent() {
           ssdmPopup.close()
           setSSMDPopup(null)
         }
-      } else if (event.data.type === 'close_popup') {
+      } else if (event.data && event.data.type === 'close_popup') {
         // 팝업 닫기 요청 처리
         if (ssdmPopup && !ssdmPopup.closed) {
           ssdmPopup.close()
@@ -427,13 +428,8 @@ function CheckoutContent() {
     try {
       setProcessing(true)
 
-      // shopId 추출 (이메일에서)
-      const emailParts = user.email?.split('@') || []
-      const shopId = emailParts[0] || user.uid
-
       const orderData = {
         userId: user.uid,
-        shopId: shopId, // SSDM용 shopId 추가
         items: cartItems.map(item => ({
           bookId: item.bookId,
           title: item.book.title,
@@ -448,8 +444,8 @@ function CheckoutContent() {
         paymentMethod: 'bank_transfer' as const,
         paymentStatus: 'completed' as const,
         // SSDM에서 개인정보 중개하므로 shippingAddress 제거
-        shippingFee: 3000,
-        finalAmount: totalAmount + 3000
+        shippingFee: 0, // 배송비 무료
+        finalAmount: totalAmount // 배송비 무료이므로 상품금액과 동일
       }
 
       // SSDM JWT 정보 준비 - 팝업에서 받은 JWT 사용

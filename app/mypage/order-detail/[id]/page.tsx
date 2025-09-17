@@ -184,7 +184,9 @@ export default function OrderDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">배송비</span>
-                <span className="text-[#A2B38B]">무료</span>
+                <span className="text-[#A2B38B]">
+                  {order.shippingFee === 0 ? '무료' : `${order.shippingFee.toLocaleString()}원`}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">결제 방법</span>
@@ -193,7 +195,7 @@ export default function OrderDetailPage() {
               <div className="border-t border-gray-200 pt-3">
                 <div className="flex justify-between font-bold text-lg">
                   <span>최종 결제 금액</span>
-                  <span className="text-[#A2B38B]">{order.totalAmount.toLocaleString()}원</span>
+                  <span className="text-[#A2B38B]">{order.finalAmount.toLocaleString()}원</span>
                 </div>
               </div>
             </div>

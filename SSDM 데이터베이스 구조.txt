@@ -1,0 +1,106 @@
+{
+  "users": {
+    "user123": {
+      "email": "hong@example.com",
+      "displayName": "홍길동",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2024-01-01T00:00:00Z",
+      "consent": {
+        "termsAgreed": true,
+        "privacyAgreed": true,
+        "marketingAgreed": false,
+        "agreedAt": "2024-01-01T00:00:00Z"
+      },
+      "profile": {
+        "name": "홍길동",
+        "phone": "010-1234-5678",
+        "address": "서울시 강남구",
+        "detailAddress": "테헤란로 123",
+        "zipCode": "12345",
+        "email": "hong@example.com",
+        "profileCompleted": true,
+        "profileCompletedAt": "2024-01-01T00:00:00Z"
+      },
+      "storageConfig": {
+        "storageLocations": ["pc", "cloud"],
+        "configuredAt": "2024-01-01T00:00:00Z",
+        "isConfigured": true
+      }
+    }
+  },
+  
+  "malls": {
+    "mall001": {
+      "mallName": "테스트쇼핑몰",
+      "allowedFields": ["name", "phone", "address"],
+      "contactEmail": "admin@testmall.com",
+      "description": "테스트용 쇼핑몰",
+      "allowedDomain": "testmall.com",
+      "emailSent": false,
+      "createdAt": "2024-01-01T00:00:00Z",
+      "expiresAt": "2024-12-31T23:59:59Z",
+      "isActive": true
+    }
+  },
+  
+  "userMappings": {
+    "mall001": {
+      "shop001": {
+        "uid": "user123",
+        "createdAt": "2024-01-01T00:00:00Z",
+        "isActive": true
+      }
+    }
+  },
+  
+  "mallServiceConsents": {
+    "user123": {
+      "mall001": {
+        "shop001": {
+          "consentType": "once",
+          "createdAt": "2024-01-01T00:00:00Z",
+          "expiresAt": "2024-07-01T00:00:00Z",
+          "isActive": true
+        }
+      }
+    }
+  },
+  
+  "jwtRecords": {
+    "user123": {
+      "mall001": {
+        "issuedAt": "2024-01-01T00:00:00Z",
+        "expiresAt": "2024-01-01T00:15:00Z",
+        "consentType": "delivery"
+      }
+    }
+  },
+  
+  "verifications": {
+    "user@example.com": {
+      "code": "123456",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "expiresAt": "2024-01-01T00:03:00Z"
+    }
+  },
+  
+  "provisionLogs": {
+    "user123": {
+      "log001": {
+        "mallId": "mall001",
+        "providedFields": ["name", "phone"],
+        "consentType": "delivery",
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    }
+  }
+}
+
+총 7개 테이블 (현재 뷰어세션 테이블 제외)
+users	사용자 기본정보, 약관동의, 개인정보, 저장소설정 저장
+malls	등록된 쇼핑몰 정보 및 허용 필드 목록 저장
+userMappings	쇼핑몰 사용자ID와 SSDM 내부UID 매핑 관계 저장
+mallServiceConsents	사용자별 쇼핑몰별 서비스동의 기록 저장
+jwtRecords	JWT 토큰 발급 이력 및 만료시간 추적
+verifications	이메일 인증코드 임시 저장 (3분 만료)
+provisionLogs	개인정보 제공 이력 로그 저장
