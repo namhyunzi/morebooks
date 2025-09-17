@@ -64,6 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [cartItemCount, setCartItemCount] = useState(0)
+  const [isTermsAgreed, setIsTermsAgreed] = useState<boolean>(false)
   
   // 개인정보 시스템 연동 상태
   const [privacyUID, setPrivacyUID] = useState<string | null>(null)
@@ -71,13 +72,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [consentStatus, setConsentStatus] = useState<'none' | 'pending' | 'allowed' | 'denied'>('none')
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
       setLoading(false)
       if (user) {
         loadCartCount(user.uid)
+        // 약관 동의 상태 확인
+        const termsAgreed = await checkUserAgreements(user.uid)
+        setIsTermsAgreed(termsAgreed)
       } else {
         setCartItemCount(0)
+        setIsTermsAgreed(false)
       }
     })
 
@@ -352,6 +357,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     loading,
     cartItemCount,
+    isTermsAgreed,
     // 개인정보 시스템 연동 상태
     privacyUID,
     privacyJWT,

@@ -28,7 +28,7 @@ export default function TermsAgreementModal({
 }: TermsAgreementModalProps) {
   const [termsAccepted, setTermsAccepted] = useState(true)
   const [privacyAccepted, setPrivacyAccepted] = useState(true)
-  const [marketingAccepted, setMarketingAccepted] = useState(false)
+  const [marketingAccepted, setMarketingAccepted] = useState(true)
 
   const handleAgree = () => {
     if (termsAccepted && privacyAccepted) {
