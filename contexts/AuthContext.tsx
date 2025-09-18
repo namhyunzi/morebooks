@@ -131,6 +131,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPrivacyUID(null)
       setPrivacyJWT(null)
       setConsentStatus('none')
+      
+      // SSDM 관련 로컬스토리지 정리
+      localStorage.removeItem('ssdm_connected')
+      localStorage.removeItem('ssdm_jwt')
+      localStorage.removeItem('consentStatus')
     } catch (error: any) {
       throw new Error('로그아웃 중 오류가 발생했습니다')
     }

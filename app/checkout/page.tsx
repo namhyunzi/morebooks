@@ -141,6 +141,8 @@ function CheckoutContent() {
         } else {
           setShowPreview(false)  // 연결하기 버튼
           localStorage.removeItem('consentStatus')
+          localStorage.removeItem('ssdm_connected')
+          localStorage.removeItem('ssdm_jwt')
         }
       } catch (error) {
         setShowPreview(false)
@@ -570,6 +572,12 @@ function CheckoutContent() {
       // 연결 해제 확인
       if (consentStatus?.isActive === false) {
         alert('개인정보 보호 시스템 연결이 해제되었습니다. 다시 연결해주세요.')
+        
+        // 연결 해제 시 정리
+        localStorage.removeItem('ssdm_connected')
+        localStorage.removeItem('ssdm_jwt')
+        localStorage.removeItem('consentStatus')
+        
         return
       }
       
@@ -621,6 +629,11 @@ function CheckoutContent() {
           const now = new Date()
           if (now > expiresAt) {
             alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
+            
+            // JWT 만료 시 정리
+            localStorage.removeItem('ssdm_jwt')
+            localStorage.removeItem('consentStatus')
+            
             return
           }
         }
