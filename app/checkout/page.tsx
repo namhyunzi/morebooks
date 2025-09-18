@@ -200,6 +200,19 @@ function CheckoutContent() {
         if (event.data.agreed) {
           localStorage.setItem('ssdm_connected', 'true')
           setConsentRejected(false)  // 거부 상태 해제
+          
+          // consentStatus 상태 업데이트
+          const newConsentStatus = {
+            status: 'connected',
+            consentType: event.data.consentType,
+            isActive: true,
+            expiresAt: event.data.expiresAt
+          }
+          setConsentStatus(newConsentStatus)
+          
+          // localStorage에도 저장
+          localStorage.setItem('consentStatus', JSON.stringify(newConsentStatus))
+          
           if (event.data.jwt) {
             // "이번만 허용" 사용자 → JWT 저장
             localStorage.setItem('ssdm_jwt', event.data.jwt)
