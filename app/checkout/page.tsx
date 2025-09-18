@@ -107,7 +107,11 @@ function CheckoutContent() {
           })
         })
         
+        console.log('API 응답 상태:', response.status, response.statusText)
+        console.log('API 응답 헤더:', response.headers)
+        
         const result = await response.json()
+        console.log('API 응답 데이터:', result)
         
         if (result.status === 'connected') {
           // 항상 허용 만료 확인
