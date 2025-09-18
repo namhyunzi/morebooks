@@ -70,7 +70,8 @@ export async function generateSSDMJWT(params: SSDMConnectionParams): Promise<{ j
 export async function connectToSSDM(
   shopId: string, 
   mallId: string,
-  onConsentResult?: (result: { agreed: boolean, consentType: string, jwt?: string }) => void
+  onConsentResult?: (result: { agreed: boolean, consentType: string, jwt?: string }) => void,
+  path: string = '/consent'  // 기본값은 /consent, 호출할 때 다른 경로 전달 가능
 ): Promise<Window | null> {
   try {
     const params: SSDMConnectionParams = {
@@ -87,9 +88,9 @@ export async function connectToSSDM(
       expiresIn: jwtResult.expiresIn
     })
     
-    // SSDM 연결 URL 생성 (JWT 없이 깔끔한 URL)
+    // SSDM 연결 URL 생성 (경로만 파라미터로 받음)
     const baseUrl = SSDM_CONFIG.baseUrl
-    const url = `${baseUrl}/consent`
+    const url = `${baseUrl}${path}`  // path 파라미터로 경로 설정
     
     // 팝업으로 SSDM 페이지 열기
     const popup = window.open(
@@ -115,7 +116,7 @@ export async function connectToSSDM(
       
       try {
         popup.postMessage({
-          type: 'init_consent',
+          type: path === '/info-preview' ? 'init_preview' : 'init_consent',  // 경로에 따라 타입 변경
           jwt: jwtResult.jwt
         }, ssdmOrigin)
         console.log('JWT 전송 성공');

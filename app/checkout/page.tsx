@@ -50,11 +50,12 @@ function CheckoutContent() {
   const [ssdmUID, setSSMDUID] = useState<string | null>(null)
   const [ssdmConnected, setSSMDConnected] = useState(false)
   const [ssdmPopup, setSSMDPopup] = useState<Window | null>(null)
-  const [consentStatus, setConsentStatus] = useState({
-    isConnected: false,
-    autoConsent: false,
-    expiresAt: null as string | null
-  })
+  
+  // 미리보기 관련 상태 추가
+  const [showPreview, setShowPreview] = useState(false)
+  const [consentStatus, setConsentStatus] = useState<any>(null)
+  const [consentResult, setConsentResult] = useState<any>(null)
+  const [consentRejected, setConsentRejected] = useState(false)
   
   // 개인정보 입력 방식 선택 상태
   const [useSSDM, setUseSSDM] = useState(false)
@@ -80,7 +81,108 @@ function CheckoutContent() {
     }
 
     loadCartItems()
-    checkConsentStatus() // SSDM 상태 확인 추가
+    
+    // 2. useEffect 수정 - 페이지 진입 시 동의 상태 확인
+    const checkConsentStatus = async () => {
+      if (!user) return
+      
+      try {
+        const shopId = user.email?.split('@')[0] || 'unknown'
+        const mallId = process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+        
+        // JWT 생성
+        const jwt = require('jsonwebtoken')
+        const jwtToken = jwt.sign(
+          { shopId, mallId },
+          process.env.PRIVACY_SYSTEM_API_KEY!,
+          { expiresIn: '5m' }
+        )
+
+        // SSDM 측 API로 직접 호출
+        const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.PRIVACY_SYSTEM_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            jwt: jwtToken
+          })
+        })
+        
+        const result = await response.json()
+        
+        if (result.status === 'connected') {
+          // 항상 허용 만료 확인
+          if (result.consentType === 'always' && result.expiresAt) {
+            const expiresAt = new Date(result.expiresAt)
+            const now = new Date()
+            if (now > expiresAt) {
+              setShowPreview(false)  // 연결하기 버튼
+              setConsentStatus(result)
+              localStorage.setItem('consentStatus', JSON.stringify(result))
+              return
+            }
+          }
+          
+          // 연결 해제 확인
+          if (result.isActive === false) {
+            setShowPreview(false)  // 연결하기 버튼
+            setConsentStatus(result)
+            localStorage.setItem('consentStatus', JSON.stringify(result))
+            return
+          }
+          
+          // 정상 동의 상태
+          setShowPreview(true)   // 미리보기 버튼
+          setConsentStatus(result)
+          localStorage.setItem('consentStatus', JSON.stringify(result))
+        } else {
+          setShowPreview(false)  // 연결하기 버튼
+          localStorage.removeItem('consentStatus')
+        }
+      } catch (error) {
+        setShowPreview(false)
+      }
+    }
+
+    checkConsentStatus()
+    
+    // localStorage에서 저장된 동의 상태 복원
+    const savedConsentStatus = localStorage.getItem('consentStatus')
+    if (savedConsentStatus) {
+      try {
+        const parsedStatus = JSON.parse(savedConsentStatus)
+        setConsentStatus(parsedStatus)
+        
+        // 저장된 상태에 따라 showPreview 설정
+        if (parsedStatus.status === 'connected') {
+          // 항상 허용 만료 확인
+          if (parsedStatus.consentType === 'always' && parsedStatus.expiresAt) {
+            const expiresAt = new Date(parsedStatus.expiresAt)
+            const now = new Date()
+            if (now > expiresAt) {
+              setShowPreview(false)  // 연결하기 버튼
+              return
+            }
+          }
+          
+          // 연결 해제 확인
+          if (parsedStatus.isActive === false) {
+            setShowPreview(false)  // 연결하기 버튼
+            return
+          }
+          
+          // 정상 동의 상태
+          setShowPreview(true)   // 미리보기 버튼
+        } else {
+          setShowPreview(false)  // 연결하기 버튼
+        }
+      } catch (error) {
+        console.error('저장된 동의 상태 파싱 오류:', error)
+        localStorage.removeItem('consentStatus')
+      }
+    }
     
     // 앱에서 돌아온 데이터 확인
     if (searchParams) {
@@ -92,9 +194,9 @@ function CheckoutContent() {
     // 팝업에서 오는 메시지 리스너 등록
     const handleMessage = (event: MessageEvent) => {
     console.log("메세지 받음", event.data);
-      // SSDM 동의 결과 처리 (isActive 필드로 판단)
-      if (event.data && typeof event.data.isActive !== 'undefined') {
-        if (event.data.isActive) {
+      // SSDM 동의 결과 처리
+      if (event.data && event.data.type === 'consent_result') {
+        if (event.data.agreed) {
           localStorage.setItem('ssdm_connected', 'true')
           if (event.data.jwt) {
             // "이번만 허용" 사용자 → JWT 저장
@@ -115,6 +217,18 @@ function CheckoutContent() {
         }
         
         // 동의/거부 결과 처리 후 팝업 닫기
+        if (ssdmPopup && !ssdmPopup.closed) {
+          ssdmPopup.close()
+          setSSMDPopup(null)
+        }
+      } else if (event.data && event.data.type === 'consent_rejected') {
+        // 거부 상태 저장
+        setConsentRejected(true)
+        
+        // 거부 결과 처리
+        toast.error('개인정보 제공을 거부하셨습니다.')
+        
+        // 팝업 닫기
         if (ssdmPopup && !ssdmPopup.closed) {
           ssdmPopup.close()
           setSSMDPopup(null)
@@ -171,35 +285,39 @@ function CheckoutContent() {
     if (!user) return
     
     try {
-      // 이메일에서 shopId 추출
-      const emailParts = user.email?.split('@') || []
-      const shopId = emailParts[0] || user.uid
+      const shopId = user.email?.split('@')[0] || 'unknown'
+      const mallId = process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
       
-      // mallId 가져오기
-      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
-      const mallId = PRIVACY_CONFIG.mallId
+      // JWT 생성
+      const jwt = require('jsonwebtoken')
+      const jwtToken = jwt.sign(
+        { shopId, mallId },
+        process.env.PRIVACY_SYSTEM_API_KEY!,
+        { expiresIn: '5m' }
+      )
+
+      // SSDM 측 API로 직접 호출
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.PRIVACY_SYSTEM_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          jwt: jwtToken
+        })
+      })
       
-      const response = await fetch(`/api/check-consent-status?shopId=${shopId}&mallId=${mallId}`)
-      const status = await response.json()
+      const result = await response.json()
       
-      if (status.isConnected) {
-        setConsentStatus(status)
-        
-        if (status.autoConsent) {
-          // 항상 동의 상태면 자동으로 SSDM 방식 선택
-          setUseSSDM(true)
-          setUseManualInput(false)
-          setSSMDConnected(true)
-        } else {
-          // 연결됐지만 수동 동의면 SSDM 방식만 활성화
-          setUseSSDM(true)
-          setUseManualInput(false)
-          setSSMDConnected(true)
-        }
+      if (result.status === 'connected') {
+        setShowPreview(true)
+        setConsentStatus(result)
+      } else {
+        setShowPreview(false)
       }
     } catch (error) {
-      console.error('SSDM 상태 확인 실패:', error)
-      // 실패해도 계속 진행 (기본값 유지)
+      setShowPreview(false)
     }
   }
 
@@ -330,36 +448,49 @@ function CheckoutContent() {
     await handleSSMDConnect()
   }
 
-  // 미리보기 팝업 열기 함수
-  const openPreview = async () => {
-    if (!user) return
-    
-    try {
-      // 이메일에서 shopId 추출
-      const emailParts = user.email?.split('@') || []
-      const shopId = emailParts[0] || user.uid
-      
-      // mallId 가져오기
-      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
-      const mallId = PRIVACY_CONFIG.mallId
-      
-      // SSDM 미리보기 URL 생성
-      const ssdmBaseUrl = process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || 'https://ssmd-smoky.vercel.app'
-      const previewUrl = `${ssdmBaseUrl}/info-preview?mallId=${mallId}&shopId=${shopId}`
-      
-      // 팝업으로 미리보기 열기
-      const popup = window.open(
-        previewUrl,
-        'ssdm-preview',
-        'width=500,height=600,scrollbars=yes,resizable=yes'
+  // 3. 기존 "개인정보 연결하기" 버튼 클릭 시 로직 수정
+  const handleConnectPersonalInfo = () => {
+    if (showPreview) {
+      // 동의한 사람 또는 항상 허용인 사람 → 미리보기 팝업 열기
+      connectToSSDM(
+        user?.email?.split('@')[0] || 'unknown',
+        process.env.NEXT_PUBLIC_MALL_ID || 'mall001',
+        (result) => {
+          if (result.agreed) {
+            setConsentResult({
+              isActive: result.agreed,
+              consentType: result.consentType,
+              jwt: result.jwt,
+              timestamp: new Date().toISOString()
+            })
+            setShowPreview(false)
+          } else {
+            // 거부한 경우 - Alert 표시
+            alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
+            setShowPreview(false)
+          }
+        },
+        '/info-preview'  // 경로 파라미터 추가
       )
-      
-      if (!popup) {
-        toast.error('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.')
-      }
-    } catch (error) {
-      console.error('미리보기 열기 실패:', error)
-      toast.error('미리보기를 열 수 없습니다.')
+    } else {
+      // 동의 안한 사람 → 기존 /consent 팝업 열기 (기존 함수 그대로 사용)
+      connectToSSDM(
+        user?.email?.split('@')[0] || 'unknown',
+        process.env.NEXT_PUBLIC_MALL_ID || 'mall001',
+        (result) => {
+          setConsentResult({
+            isActive: result.agreed,
+            consentType: result.consentType,
+            jwt: result.jwt,
+            timestamp: new Date().toISOString()
+          })
+          setShowPreview(false)
+        },
+        (error) => {
+          console.error('SSDM 연결 실패:', error)
+          alert(error)
+        }
+      )
     }
   }
 
@@ -409,9 +540,78 @@ function CheckoutContent() {
         return
       }
     } else if (useSSDM) {
-      // SSDM 방식일 때는 연결 상태 검증
+      // SSDM 방식일 때는 연결 상태 및 동의 상태 검증
       if (!ssdmConnected) {
         alert('개인정보 보호 시스템 연결이 필요합니다.\n\n"개인정보 보호 시스템 사용"을 체크하고 연결해주세요.')
+        return
+      }
+      
+      // 거부 상태 확인
+      if (consentRejected) {
+        alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
+        return
+      }
+      
+      // 연결 해제 확인
+      if (consentStatus?.isActive === false) {
+        alert('개인정보 보호 시스템 연결이 해제되었습니다. 다시 연결해주세요.')
+        return
+      }
+      
+      // 동의 상태별 분기 처리
+      if (consentStatus?.consentType === 'always' && consentStatus?.isActive === true) {
+        // 1번: 항상허용 사용자 - 만료 시간 확인
+        if (consentStatus?.expiresAt) {
+          const expiresAt = new Date(consentStatus.expiresAt)
+          const now = new Date()
+          if (now > expiresAt) {
+            alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
+            return
+          }
+        }
+        // 유효한 항상허용 → /api/issue-jwt 호출하여 택배사용 JWT 발급
+        try {
+          const response = await fetch('/api/issue-jwt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              shopId: user.email?.split('@')[0] || 'unknown',
+              mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+            })
+          })
+          const result = await response.json()
+          if (result.jwt) {
+            // 발급받은 JWT를 나중에 사용할 수 있도록 저장
+            setSSMDJWT(result.jwt)
+            console.log('항상허용 사용자 - 택배사용 JWT 발급 완료')
+          } else {
+            alert('택배사용 JWT 발급에 실패했습니다.')
+            return
+          }
+        } catch (error) {
+          console.error('JWT 발급 오류:', error)
+          alert('택배사용 JWT 발급 중 오류가 발생했습니다.')
+          return
+        }
+      } else if (consentStatus?.consentType === 'once') {
+        // 2번: 일회성 사용자 - 만료 시간만 확인
+        if (consentStatus?.expiresAt) {
+          const expiresAt = new Date(consentStatus.expiresAt)
+          const now = new Date()
+          if (now > expiresAt) {
+            alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
+            return
+          }
+        }
+        // 유효한 일회성 → 팝업에서 받은 JWT 사용
+        if (!ssdmJWT) {
+          alert('개인정보 제공 JWT가 없습니다. 다시 연결해주세요.')
+          return
+        }
+        console.log('일회성 사용자 - 팝업에서 받은 JWT 사용')
+      } else {
+        // 3번: 거부/무효 사용자
+        alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
         return
       }
     } else {
@@ -448,13 +648,13 @@ function CheckoutContent() {
         finalAmount: totalAmount // 배송비 무료이므로 상품금액과 동일
       }
 
-      // SSDM JWT 정보 준비 - 팝업에서 받은 JWT 사용
+      // SSDM JWT 정보 준비 - 동의 상태별로 설정된 JWT 사용
       let jwtToStore: string | undefined = undefined
       
       if (useSSDM && ssdmJWT) {
-        // 팝업에서 받은 배송용 JWT 그대로 사용
+        // 위에서 동의 상태별로 설정된 JWT 사용
         jwtToStore = ssdmJWT
-        console.log('팝업에서 받은 배송용 JWT 사용:', ssdmJWT)
+        console.log('설정된 JWT 사용:', ssdmJWT)
       }
 
       // 주문 처리 (JWT 정보 포함)
@@ -611,7 +811,7 @@ function CheckoutContent() {
                 <div className={`rounded-lg p-4 text-white transition-all ${
                   useSSDM 
                     ? ssdmConnected 
-                      ? consentStatus.autoConsent
+                      ? consentStatus?.autoConsent
                         ? 'bg-gradient-to-r from-blue-500 to-blue-600' // 항상 동의
                         : 'bg-gradient-to-r from-green-400 to-green-500' // 수동 동의 (채도 낮춤)
                       : 'bg-gradient-to-r from-[#A2B38B] to-[#8fa076]'
@@ -621,7 +821,7 @@ function CheckoutContent() {
                     <Smartphone className="w-6 h-6" />
                     <div className="flex-1">
                       {ssdmConnected ? (
-                        consentStatus.autoConsent ? (
+                        consentStatus?.autoConsent ? (
                           <>
                             <h4 className="font-semibold text-sm">개인정보 보호 시스템 자동 동의 중</h4>
                             <p className="text-xs opacity-90 mt-1">6개월간 자동으로 개인정보가 제공됩니다.</p>
@@ -644,9 +844,9 @@ function CheckoutContent() {
                         variant="outline" 
                         size="sm"
                         className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
-                        onClick={handleSSMDConnect}
+                        onClick={handleConnectPersonalInfo}
                       >
-                        개인정보 연결하기
+                        {showPreview ? '개인정보 미리보기' : '개인정보 연결하기'}
                       </Button>
                     )}
                     {useSSDM && ssdmConnected && (
@@ -654,9 +854,9 @@ function CheckoutContent() {
                         variant="outline" 
                         size="sm"
                         className="bg-white text-green-500 border-white hover:bg-gray-100 hover:text-green-600 text-xs"
-                        onClick={openPreview}
+                        onClick={handleConnectPersonalInfo}
                       >
-                        제공된 정보 확인
+                        {showPreview ? '개인정보 미리보기' : '개인정보 연결하기'}
                       </Button>
                     )}
                   </div>
