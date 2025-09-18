@@ -470,7 +470,7 @@ function CheckoutContent() {
             setShowPreview(false)
           }
         },
-        '/info-preview'  // 경로 파라미터 추가
+        '/info-preview'  // 4번째 인자로 path 전달
       )
     } else {
       // 동의 안한 사람 → 기존 /consent 팝업 열기 (기존 함수 그대로 사용)
@@ -485,11 +485,8 @@ function CheckoutContent() {
             timestamp: new Date().toISOString()
           })
           setShowPreview(false)
-        },
-        (error) => {
-          console.error('SSDM 연결 실패:', error)
-          alert(error)
         }
+        // error 콜백 제거 - connectToSSDM 함수에서 자동으로 alert 처리
       )
     }
   }

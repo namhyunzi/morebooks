@@ -32,6 +32,8 @@ export async function generateSSDMJWT(params: SSDMConnectionParams): Promise<{ j
   const { shopId, mallId } = params
   
   try {
+    console.log('API 호출 시작:', { shopId, mallId })
+    
     // 서버사이드 API 라우트를 통해 안전하게 JWT 생성
     const response = await fetch('/api/ssdm/connect', {
       method: 'POST',
@@ -41,8 +43,11 @@ export async function generateSSDMJWT(params: SSDMConnectionParams): Promise<{ j
       body: JSON.stringify({ shopId, mallId })
     })
     
+    console.log('API 응답 상태:', response.status, response.statusText)
+    
     if (!response.ok) {
       const errorData = await response.json()
+      console.error('API 에러 응답:', errorData)
       throw new Error(`JWT 생성 실패: ${errorData.error || response.status}`)
     }
     
@@ -50,7 +55,8 @@ export async function generateSSDMJWT(params: SSDMConnectionParams): Promise<{ j
     console.log('JWT 생성 성공:', {
       shopId: result.shopId,
       mallId: result.mallId,
-      expiresIn: result.expiresIn
+      expiresIn: result.expiresIn,
+      jwtLength: result.jwt?.length
     })
     
     return {
@@ -60,6 +66,8 @@ export async function generateSSDMJWT(params: SSDMConnectionParams): Promise<{ j
     
   } catch (error) {
     console.error('JWT 생성 실패:', error)
+    console.error('에러 타입:', typeof error)
+    console.error('에러 메시지:', error instanceof Error ? error.message : 'Unknown error')
     throw error
   }
 }
@@ -80,7 +88,9 @@ export async function connectToSSDM(
     }
     
     // 서버사이드에서 안전하게 JWT 생성
+    console.log('JWT 생성 시도:', params)
     const jwtResult = await generateSSDMJWT(params)
+    console.log('JWT 생성 성공:', jwtResult)
     
     console.log('SSDM JWT 생성 완료:', {
       shopId,
