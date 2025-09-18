@@ -21,7 +21,7 @@ export interface SSDMResponse {
 
 // SSDM 시스템 설정 - 클라이언트용 (API Key는 서버사이드에서만 사용)
 export const SSDM_CONFIG: SSDMConfig = {
-  baseUrl: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_BASE_URL || 'https://ssmd-smoky.vercel.app/', // 클라이언트용
+  baseUrl: process.env.NEXT_PUBLIC_SSDM_URL || 'https://ssmd-smoky.vercel.app', // 클라이언트용
   // apiKey는 서버사이드에서만 사용
 }
 
@@ -91,6 +91,11 @@ export async function connectToSSDM(
     // SSDM 연결 URL 생성 (경로만 파라미터로 받음)
     const baseUrl = SSDM_CONFIG.baseUrl
     const url = `${baseUrl}${path}`  // path 파라미터로 경로 설정
+    
+    // 디버깅: URL 확인
+    console.log('생성된 URL:', url)
+    console.log('baseUrl:', baseUrl)
+    console.log('path:', path)
     
     // 팝업으로 SSDM 페이지 열기
     const popup = window.open(
