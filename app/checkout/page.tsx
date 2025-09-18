@@ -575,38 +575,44 @@ function CheckoutContent() {
       
       // 동의 상태별 분기 처리
       if (consentStatus?.consentType === 'always' && consentStatus?.isActive === true) {
-        // 1번: 항상허용 사용자 - 만료 시간 확인
-        if (consentStatus?.expiresAt) {
-          const expiresAt = new Date(consentStatus.expiresAt)
-          const now = new Date()
-          if (now > expiresAt) {
-            alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
-            return
+        // 1번: 항상허용 사용자 - 팝업에서 받은 JWT가 있는지 확인
+        if (ssdmJWT) {
+          // 팝업에서 받은 JWT 사용 (이번 주문에서 동의한 사람)
+          console.log('팝업에서 받은 JWT 사용')
+        } else {
+          // 이전에 항상허용한 사람 → JWT 발급
+          if (consentStatus?.expiresAt) {
+            const expiresAt = new Date(consentStatus.expiresAt)
+            const now = new Date()
+            if (now > expiresAt) {
+              alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
+              return
+            }
           }
-        }
-        // 유효한 항상허용 → /api/issue-jwt 호출하여 택배사용 JWT 발급
-        try {
-          const response = await fetch('/api/issue-jwt', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              shopId: user.email?.split('@')[0] || 'unknown',
-              mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+          // 유효한 항상허용 → /api/issue-jwt 호출하여 택배사용 JWT 발급
+          try {
+            const response = await fetch('/api/issue-jwt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                shopId: user.email?.split('@')[0] || 'unknown',
+                mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+              })
             })
-          })
-          const result = await response.json()
-          if (result.jwt) {
-            // 발급받은 JWT를 나중에 사용할 수 있도록 저장
-            setSSMDJWT(result.jwt)
-            console.log('항상허용 사용자 - 택배사용 JWT 발급 완료')
-          } else {
-            alert('택배사용 JWT 발급에 실패했습니다.')
+            const result = await response.json()
+            if (result.jwt) {
+              // 발급받은 JWT를 나중에 사용할 수 있도록 저장
+              setSSMDJWT(result.jwt)
+              console.log('항상허용 사용자 - 택배사용 JWT 발급 완료')
+            } else {
+              alert('택배사용 JWT 발급에 실패했습니다.')
+              return
+            }
+          } catch (error) {
+            console.error('JWT 발급 오류:', error)
+            alert('택배사용 JWT 발급 중 오류가 발생했습니다.')
             return
           }
-        } catch (error) {
-          console.error('JWT 발급 오류:', error)
-          alert('택배사용 JWT 발급 중 오류가 발생했습니다.')
-          return
         }
       } else if (consentStatus?.consentType === 'once') {
         // 2번: 일회성 사용자 - 만료 시간만 확인
