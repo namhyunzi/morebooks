@@ -22,6 +22,7 @@ import {
   validateSSDMJWT, 
   sendJWTToDeliveryService, 
   getSSDMErrorMessage,
+  generateSSDMJWT,
   SSDMResponse 
 } from "@/lib/ssdm-api"
 
@@ -91,12 +92,8 @@ function CheckoutContent() {
         const mallId = process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
         
         // JWT 생성
-        const jwt = require('jsonwebtoken')
-        const jwtToken = jwt.sign(
-          { shopId, mallId },
-          process.env.PRIVACY_SYSTEM_API_KEY!,
-          { expiresIn: '5m' }
-        )
+        const jwtResult = await generateSSDMJWT({ shopId, mallId })
+        const jwtToken = jwtResult.jwt
 
         // SSDM 측 API로 직접 호출
         const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
