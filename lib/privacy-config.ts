@@ -1,8 +1,8 @@
 // 개인정보 시스템 연동 설정 - 환경변수 기반
 export const PRIVACY_CONFIG = {
-  baseUrl: process.env.NEXT_PUBLIC_SSDM_URL || 'https://ssdm-demo.vercel.app',
-  apiKey: process.env.PRIVACY_SYSTEM_API_KEY || 'demo-api-key-12345',
-  mallId: process.env.MALL_ID || 'morebooks',
+  baseUrl: process.env.NEXT_PUBLIC_SSDM_URL,
+  apiKey: process.env.PRIVACY_SYSTEM_API_KEY,
+  mallId: process.env.MALL_ID,
   publicKey: process.env.SHOP_PUBLIC_KEY, // 쇼핑몰 공개키
   privateKey: process.env.SHOP_PRIVATE_KEY, // 쇼핑몰 개인키
   sessionTypes: {

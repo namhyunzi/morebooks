@@ -1,0 +1,134 @@
+{
+  "users": {
+    "user123": {
+      "email": "hong@example.com",
+      "displayName": "홍길동",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2024-01-01T00:00:00Z",
+      "consent": {
+        "termsAgreed": true,
+        "privacyAgreed": true,
+        "marketingAgreed": false,
+        "agreedAt": "2024-01-01T00:00:00Z"
+      },
+      "profile": {
+        "name": "홍길동",
+        "phone": "010-1234-5678",
+        "address": "서울시 강남구",
+        "detailAddress": "테헤란로 123",
+        "zipCode": "12345",
+        "email": "hong@example.com",
+        "profileCompleted": true,
+        "profileCompletedAt": "2024-01-01T00:00:00Z"
+      },
+      "storageConfig": {
+        "storageLocations": ["pc", "cloud"],
+        "configuredAt": "2024-01-01T00:00:00Z",
+        "isConfigured": true
+      }
+    }
+  },
+  
+  "malls": {
+    "mall001": {
+      "mallName": "테스트쇼핑몰",
+      "allowedFields": ["name", "phone", "address"],
+      "contactEmail": "admin@testmall.com",
+      "description": "테스트용 쇼핑몰",
+      "allowedDomain": "testmall.com",
+      "emailSent": false,
+      "createdAt": "2024-01-01T00:00:00Z",
+      "expiresAt": "2024-12-31T23:59:59Z",
+      "isActive": true
+    }
+  },
+  
+  "userMappings": {
+    "mall001": {
+      "shop001": {
+        "uid": "user123",
+        "createdAt": "2024-01-01T00:00:00Z",
+        "isActive": true
+      }
+    }
+  },
+  
+  "mallServiceConsents": {
+    "user123": {
+      "mall001": {
+        "shop001": {
+          "consentType": "once",
+        createdAt: new Date().toISOString(),
+        expiresAt: consentType === 'once' 
+       ? new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15분 후
+       : new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000).toISOString(), // 6개월 후
+          "isActive": true
+        }
+      }
+    }
+  },
+  
+  "jwtRecords": {
+    "user123": {
+      "mall001": {
+        "issuedAt": "2024-01-01T00:00:00Z",
+        "expiresAt": "2024-01-01T00:15:00Z",
+        "consentType": "delivery"
+      }
+    }
+  },
+  
+  "verifications": {
+    "user@example.com": {
+      "code": "123456",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "expiresAt": "2024-01-01T00:03:00Z"
+    }
+  },
+  
+  "provisionLogs": {
+    "user123": {
+      "log001": {
+        "mallId": "mall001",
+        "providedFields": ["name", "phone"],
+        "consentType": "delivery",
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    }
+  }
+}
+
+총 7개 테이블 (현재 뷰어세션 테이블 제외)
+users	사용자 기본정보, 약관동의, 개인정보, 저장소설정 저장
+malls	등록된 쇼핑몰 정보 및 허용 필드 목록 저장
+userMappings	쇼핑몰 사용자ID와 SSDM 내부UID 매핑 관계 저장
+mallServiceConsents	사용자별 쇼핑몰별 서비스동의 기록 저장
+jwtRecords	JWT 토큰 발급 이력 및 만료시간 추적
+verifications	이메일 인증코드 임시 저장 (3분 만료)
+provisionLogs	개인정보 제공 이력 로그 저장
+
+여튼 지금 팝업에서 로그인 바로 안됐을때 분산저장소 설정에서 완료하기전까지
+세션에jwt 임시보관하고 창닫으면 세션 제거 하고 맞지? 그리고 분산저장소 설정하면 정보제공화면으로 이동하고
+jwt 에서 안에 shopId, mallId 읽어서 지금 firebase에서 읽어오도록 되어있는거 맞아?
+
+
+동의만료 타이머, 
+/api/check-consent-status 주문/결제 페이지 진입 API
+1. 항상 허용 + 만료 안됨
+{
+  "status": "connected",
+  "consentType": "always"
+}
+2. 일회성 동의 + 유효함
+{
+  "status": "connected", 
+  "consentType": "once",
+  "expiresAt": "2024-01-01T12:30:00Z"
+}
+3. 일회성 동의 + 페이지 이탈
+{
+  "status": "need_connect"
+}
+3가지 상황
+
+그러면 저 api에 대한 응답을 우선 1번상황이면 리얼데이터 베이스 타임에서  지금 ssdm에 로그인한 사용자의 동의방식이 있나 먼저 확인하고 항상 허용으로 되어있다면 만료일을 확인해서 이전이라면 1번을 응답으로 주고 2.에서는 우선 그 일회성 동의일떄 동의 만료에 대한 타이머를 설정하고 근데 지금 택배용 jwt를 발급해주긴 하지만 그건 이용도 가아니니까? 우선 그냥 동의만료 타이머를 짧게 15분 정도 설정하고 그걸 저 expiresAt로 한다는건가? 그리고 3번은 그냥 저렇게 하면 될거같고 근데 애초에 지금 원래 /api/check-consent-status 이 요청자체를 URL: /api/check-consent-status?shopId=${shopId}&mallId=${mallId} 이렇게 헀었잖아 그러면 수정한다면 그냥 저 json으로 정보 데이터 자체만 받아서 1,2번일때는 기존에 팝업여는 것처럼 /info-preview 로 열면서 jwt 전달하고 이처리는 외북쇼핑몰이 하게하고 그리고 3번일때는 기존 외부 쇼핑몰에서 팝업 열때처럼 /consent 로 열면서 jwt 전달하라는거 맞아? 잘이해한거야? 수정하지말고 대답좀 

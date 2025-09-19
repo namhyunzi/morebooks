@@ -845,9 +845,9 @@ function CheckoutContent() {
                 <div className={`rounded-lg p-4 text-white transition-all ${
                   useSSDM 
                     ? ssdmConnected 
-                      ? consentStatus?.autoConsent
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600' // 항상 동의
-                        : 'bg-gradient-to-r from-green-400 to-green-500' // 수동 동의 (채도 낮춤)
+                      ? consentStatus?.consentType === 'always'
+                        ? 'bg-gradient-to-r from-green-400 to-green-500' // 항상 허용 - 초록색
+                        : 'bg-gradient-to-r from-green-400 to-green-500' // 수동 동의도 초록색
                       : 'bg-gradient-to-r from-[#A2B38B] to-[#8fa076]'
                     : 'bg-gray-200 opacity-50'
                 }`}>
@@ -855,7 +855,7 @@ function CheckoutContent() {
                     <Smartphone className="w-6 h-6" />
                     <div className="flex-1">
                       {ssdmConnected ? (
-                        consentStatus?.autoConsent ? (
+                        consentStatus?.consentType === 'always' ? (
                           <>
                             <h4 className="font-semibold text-sm">개인정보 보호 시스템 자동 동의 중</h4>
                             <p className="text-xs opacity-90 mt-1">6개월간 자동으로 개인정보가 제공됩니다.</p>
@@ -873,6 +873,16 @@ function CheckoutContent() {
                         </>
                       )}
                     </div>
+                    {useSSDM && ssdmConnected && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="bg-white text-green-500 border-white hover:bg-green-50 hover:text-green-600 text-xs"
+                        onClick={handleConnectPersonalInfo}
+                      >
+                        개인정보 미리보기
+                      </Button>
+                    )}
                     {useSSDM && !ssdmConnected && (
                       <Button 
                         variant="outline" 
@@ -880,17 +890,7 @@ function CheckoutContent() {
                         className="bg-white text-[#A2B38B] border-white hover:bg-gray-50"
                         onClick={handleConnectPersonalInfo}
                       >
-                        {showPreview ? '개인정보 미리보기' : '개인정보 연결하기'}
-                      </Button>
-                    )}
-                    {useSSDM && ssdmConnected && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="bg-white text-green-500 border-white hover:bg-gray-100 hover:text-green-600 text-xs"
-                        onClick={handleConnectPersonalInfo}
-                      >
-                        {showPreview ? '개인정보 미리보기' : '개인정보 연결하기'}
+                        개인정보 연결하기
                       </Button>
                     )}
                   </div>
