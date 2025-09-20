@@ -26,6 +26,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   cartItemCount: number
+  isLoginComplete: boolean
   // 개인정보 시스템 연동 정보
   privacyUID: string | null
   privacyJWT: string | null
@@ -40,6 +41,11 @@ interface AuthContextType {
     privacyAccepted: boolean
     marketingAccepted: boolean
   }) => Promise<any>
+  completeGoogleLogin: (agreements: {
+    termsAccepted: boolean
+    privacyAccepted: boolean
+    marketingAccepted: boolean
+  }) => Promise<void>
   deleteUserAccount: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   checkSignInMethods: (email: string) => Promise<{ signInMethods: string[], isGoogleOnly: boolean, registered: boolean }>
@@ -69,6 +75,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [privacyUID, setPrivacyUID] = useState<string | null>(null)
   const [privacyJWT, setPrivacyJWT] = useState<string | null>(null)
   const [consentStatus, setConsentStatus] = useState<'none' | 'pending' | 'allowed' | 'denied'>('none')
+  
+  // 로그인 완료 상태
+  const [isLoginComplete, setIsLoginComplete] = useState(false)
 
 
   useEffect(() => {
@@ -77,8 +86,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false)
       if (user) {
         loadCartCount(user.uid)
+        // 기존 로그인 상태 복원 시에만 완료 상태 설정
+        if (!loading) {
+          setIsLoginComplete(true)
+        }
       } else {
         setCartItemCount(0)
+        setIsLoginComplete(false)
       }
     })
 
@@ -109,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     try {
       await signInWithEmailAndPassword(auth, email, password)
+      setIsLoginComplete(true)
     } catch (error: any) {
       throw new Error(getErrorMessage(error.code))
     }
@@ -127,6 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signOut(auth)
       setCartItemCount(0)
+      setIsLoginComplete(false)
       // 개인정보 시스템 연동 정보 초기화
       setPrivacyUID(null)
       setPrivacyJWT(null)
@@ -178,6 +194,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return userCredential
     } catch (error: any) {
       throw new Error(getErrorMessage(error.code))
+    }
+  }
+
+  // 약관동의 완료 후 호출되는 함수
+  const completeGoogleLogin = async (agreements: {
+    termsAccepted: boolean
+    privacyAccepted: boolean
+    marketingAccepted: boolean
+  }) => {
+    try {
+      if (user) {
+        await saveUserAgreements(user.uid, user.email || '', agreements)
+        setIsLoginComplete(true)
+      }
+    } catch (error) {
+      console.error('약관동의 정보 저장 실패:', error)
+      throw error
     }
   }
 
@@ -349,6 +382,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     loading,
     cartItemCount,
+    isLoginComplete,
     // 개인정보 시스템 연동 상태
     privacyUID,
     privacyJWT,
@@ -359,6 +393,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     loginWithGoogle,
     loginWithGoogleWithTerms,
+    completeGoogleLogin,
     deleteUserAccount,
     resetPassword,
     checkSignInMethods,

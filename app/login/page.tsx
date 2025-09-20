@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation"
 import TermsAgreementModal from "@/components/terms-agreement-modal"
 
 export default function LoginPage() {
-  const { login, loginWithGoogleWithTerms, deleteUserAccount, checkSignInMethods } = useAuth()
+  const { login, loginWithGoogle, completeGoogleLogin, deleteUserAccount, checkSignInMethods } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -88,18 +88,18 @@ export default function LoginPage() {
     setError('')
 
     try {
-      // 구글 로그인 팝업 열기
-      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth')
-      const { auth } = await import('@/lib/firebase')
-      
-      const provider = new GoogleAuthProvider()
-      const userCredential = await signInWithPopup(auth, provider)
+      const userCredential = await loginWithGoogle()
       
       // 기존 사용자인지 확인 (약관동의 정보가 있는지 확인)
       const hasExistingAgreements = await checkUserAgreements(userCredential.user.uid)
       
       if (hasExistingAgreements) {
-        // 기존 사용자 - 바로 로그인
+        // 기존 사용자 - 즉시 완료 처리
+        await completeGoogleLogin({
+          termsAccepted: true,
+          privacyAccepted: true,
+          marketingAccepted: true
+        })
         router.push('/')
       } else {
         // 신규 사용자 - 약관동의 모달 표시
@@ -139,8 +139,8 @@ export default function LoginPage() {
     try {
       setLoading(true)
       
-      // 약관동의 정보를 Realtime Database에 저장
-      await saveUserAgreements(pendingGoogleUser.user.uid, pendingGoogleUser.user.email || '', agreements)
+      // 약관동의 완료 후 최종 로그인 완료 처리
+      await completeGoogleLogin(agreements)
       
       // 모달 닫기
       setShowTermsModal(false)
