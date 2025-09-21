@@ -59,8 +59,8 @@ function CheckoutContent() {
   const [consentRejected, setConsentRejected] = useState(false)
   
   // 개인정보 입력 방식 선택 상태
-  const [useSSDM, setUseSSDM] = useState(false)
-  const [useManualInput, setUseManualInput] = useState(true)
+  const [useSSDM, setUseSSDM] = useState(true)  // 기본적으로 개인정보 보호 시스템 사용
+  const [useManualInput, setUseManualInput] = useState(false)  // 기본적으로 직접 입력 비활성화
   
   
   // 주문자 정보 상태
