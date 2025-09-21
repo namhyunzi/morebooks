@@ -100,7 +100,7 @@ export async function connectToSSDM(
     
     // SSDM 연결 URL 생성 (경로만 파라미터로 받음)
     const baseUrl = SSDM_CONFIG.baseUrl
-    const url = `${baseUrl}${path}`  // path 파라미터로 경로 설정
+    const url = `${baseUrl}${path}?popup=true`  // path 파라미터로 경로 설정
     
     // 디버깅: URL 확인
     console.log('생성된 URL:', url)
