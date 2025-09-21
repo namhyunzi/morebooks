@@ -137,15 +137,19 @@ function CheckoutContent() {
           // 정상 동의 상태
           setShowPreview(true)   // 미리보기 버튼
           setConsentStatus(result)
+          setSSMDConnected(true)  // SSDM 연결 상태 설정
           localStorage.setItem('consentStatus', JSON.stringify(result))
+          localStorage.setItem('ssdm_connected', 'true')
         } else {
           setShowPreview(false)  // 연결하기 버튼
+          setSSMDConnected(false)  // SSDM 연결 상태 해제
           localStorage.removeItem('consentStatus')
           localStorage.removeItem('ssdm_connected')
           localStorage.removeItem('ssdm_jwt')
         }
       } catch (error) {
         setShowPreview(false)
+        setSSMDConnected(false)  // SSDM 연결 상태 해제
       }
     }
 
@@ -178,8 +182,10 @@ function CheckoutContent() {
           
           // 정상 동의 상태
           setShowPreview(true)   // 미리보기 버튼
+          setSSMDConnected(true)  // SSDM 연결 상태 설정
         } else {
           setShowPreview(false)  // 연결하기 버튼
+          setSSMDConnected(false)  // SSDM 연결 상태 해제
         }
       } catch (error) {
         console.error('저장된 동의 상태 파싱 오류:', error)
@@ -333,11 +339,14 @@ function CheckoutContent() {
       if (result.status === 'connected') {
         setShowPreview(true)
         setConsentStatus(result)
+        setSSMDConnected(true)  // SSDM 연결 상태 설정
       } else {
         setShowPreview(false)
+        setSSMDConnected(false)  // SSDM 연결 상태 해제
       }
     } catch (error) {
       setShowPreview(false)
+      setSSMDConnected(false)  // SSDM 연결 상태 해제
     }
   }
 
