@@ -79,7 +79,7 @@ export async function connectToSSDM(
   shopId: string, 
   mallId: string,
   onConsentResult?: (result: { agreed: boolean, consentType: string, jwt?: string }) => void,
-  path: string = '/'  // 기본값은 /consent, 호출할 때 다른 경로 전달 가능
+  path: string = '/consent'  // 기본값은 /consent, 호출할 때 다른 경로 전달 가능
 ): Promise<Window | null> {
   try {
     const params: SSDMConnectionParams = {
