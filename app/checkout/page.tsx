@@ -632,7 +632,7 @@ function CheckoutContent() {
           }
         }
       } else if (consentStatus?.consentType === 'once') {
-        // 2번: 일회성 사용자 - 만료 시간만 확인
+        // 2번: 일회성 사용자 - 만료 시간 확인
         if (consentStatus?.expiresAt) {
           const expiresAt = new Date(consentStatus.expiresAt)
           const now = new Date()
@@ -646,12 +646,37 @@ function CheckoutContent() {
             return
           }
         }
-        // 유효한 일회성 → 팝업에서 받은 JWT 사용
-        if (!ssdmJWT) {
-          alert('개인정보 제공 JWT가 없습니다. 다시 연결해주세요.')
-          return
+        
+        // 유효한 일회성 사용자
+        if (ssdmJWT) {
+          // 팝업에서 받은 JWT가 있으면 사용
+          console.log('일회성 사용자 - 팝업에서 받은 JWT 사용')
+        } else {
+          // JWT가 없으면 발급 요청 (항상 허용과 동일한 로직)
+          try {
+            const response = await fetch('/api/issue-jwt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                shopId: user.email?.split('@')[0] || 'unknown',
+                mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+              })
+            })
+            const result = await response.json()
+            if (result.jwt) {
+              // 발급받은 JWT를 나중에 사용할 수 있도록 저장
+              setSSMDJWT(result.jwt)
+              console.log('일회성 사용자 - JWT 발급 완료')
+            } else {
+              alert('JWT 발급에 실패했습니다.')
+              return
+            }
+          } catch (error) {
+            console.error('JWT 발급 오류:', error)
+            alert('JWT 발급 중 오류가 발생했습니다.')
+            return
+          }
         }
-        console.log('일회성 사용자 - 팝업에서 받은 JWT 사용')
       } else {
         // 3번: 거부/무효 사용자
         alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
