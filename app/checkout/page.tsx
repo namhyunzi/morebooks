@@ -121,7 +121,7 @@ function CheckoutContent() {
             if (now > expiresAt) {
               setShowPreview(false)  // 연결하기 버튼
               setConsentStatus(result)
-              localStorage.setItem('consentStatus', JSON.stringify(result))
+              sessionStorage.setItem('consentStatus', JSON.stringify(result))
               return
             }
           }
@@ -130,7 +130,7 @@ function CheckoutContent() {
           if (result.isActive === false) {
             setShowPreview(false)  // 연결하기 버튼
             setConsentStatus(result)
-            localStorage.setItem('consentStatus', JSON.stringify(result))
+            sessionStorage.setItem('consentStatus', JSON.stringify(result))
             return
           }
           
@@ -138,14 +138,14 @@ function CheckoutContent() {
           setShowPreview(true)   // 미리보기 버튼
           setConsentStatus(result)
           setSSMDConnected(true)  // SSDM 연결 상태 설정
-          localStorage.setItem('consentStatus', JSON.stringify(result))
-          localStorage.setItem('ssdm_connected', 'true')
+          sessionStorage.setItem('consentStatus', JSON.stringify(result))
+          sessionStorage.setItem('ssdm_connected', 'true')
         } else {
           setShowPreview(false)  // 연결하기 버튼
           setSSMDConnected(false)  // SSDM 연결 상태 해제
-          localStorage.removeItem('consentStatus')
-          localStorage.removeItem('ssdm_connected')
-          localStorage.removeItem('ssdm_jwt')
+          sessionStorage.removeItem('consentStatus')
+          sessionStorage.removeItem('ssdm_connected')
+          sessionStorage.removeItem('ssdm_jwt')
         }
       } catch (error) {
         setShowPreview(false)
@@ -155,8 +155,8 @@ function CheckoutContent() {
 
     checkConsentStatus()
     
-    // localStorage에서 저장된 동의 상태 복원
-    const savedConsentStatus = localStorage.getItem('consentStatus')
+    // sessionStorage에서 저장된 동의 상태 복원
+    const savedConsentStatus = sessionStorage.getItem('consentStatus')
     if (savedConsentStatus) {
       try {
         const parsedStatus = JSON.parse(savedConsentStatus)
@@ -189,7 +189,7 @@ function CheckoutContent() {
         }
       } catch (error) {
         console.error('저장된 동의 상태 파싱 오류:', error)
-        localStorage.removeItem('consentStatus')
+        sessionStorage.removeItem('consentStatus')
       }
     }
     
@@ -206,7 +206,7 @@ function CheckoutContent() {
       // SSDM 동의 결과 처리
       if (event.data && event.data.type === 'consent_result') {
         if (event.data.agreed) {
-          localStorage.setItem('ssdm_connected', 'true')
+          sessionStorage.setItem('ssdm_connected', 'true')
           setConsentRejected(false)  // 거부 상태 해제
           
           // consentStatus 상태 업데이트
@@ -218,12 +218,12 @@ function CheckoutContent() {
           }
           setConsentStatus(newConsentStatus)
           
-          // localStorage에도 저장
-          localStorage.setItem('consentStatus', JSON.stringify(newConsentStatus))
+          // sessionStorage에도 저장
+          sessionStorage.setItem('consentStatus', JSON.stringify(newConsentStatus))
           
           if (event.data.jwt) {
             // "이번만 허용" 사용자 → JWT 저장
-            localStorage.setItem('ssdm_jwt', event.data.jwt)
+            sessionStorage.setItem('ssdm_jwt', event.data.jwt)
             setSSMDJWT(event.data.jwt)
             setSSMDConnected(true)
             setUseSSDM(true)
@@ -445,6 +445,10 @@ function CheckoutContent() {
       const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
       const mallId = PRIVACY_CONFIG.mallId
       
+      if (!mallId) {
+        throw new Error('Mall ID가 설정되지 않았습니다.')
+      }
+      
       // SSDM 연결 (동의 결과 콜백 포함)
       const popup = await connectToSSDM(shopId, mallId, (result) => {
         console.log('SSDM 동의 결과:', result)
@@ -583,9 +587,9 @@ function CheckoutContent() {
         alert('개인정보 보호 시스템 연결이 해제되었습니다. 다시 연결해주세요.')
         
         // 연결 해제 시 정리
-        localStorage.removeItem('ssdm_connected')
-        localStorage.removeItem('ssdm_jwt')
-        localStorage.removeItem('consentStatus')
+        sessionStorage.removeItem('ssdm_connected')
+        sessionStorage.removeItem('ssdm_jwt')
+        sessionStorage.removeItem('consentStatus')
         
         return
       }
@@ -640,8 +644,8 @@ function CheckoutContent() {
             alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
             
             // JWT 만료 시 정리
-            localStorage.removeItem('ssdm_jwt')
-            localStorage.removeItem('consentStatus')
+            sessionStorage.removeItem('ssdm_jwt')
+            sessionStorage.removeItem('consentStatus')
             
             return
           }

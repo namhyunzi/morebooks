@@ -93,6 +93,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setCartItemCount(0)
         setIsLoginComplete(false)
+        // 로그인하지 않은 상태에서 불필요한 스토리지 데이터 정리
+        cleanupStorageOnLogout()
       }
     })
 
@@ -118,6 +120,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     await loadCartCount(user.uid)
+  }
+
+  // 로그아웃 시 스토리지 정리 함수
+  const cleanupStorageOnLogout = () => {
+    try {
+      // localStorage에서 Firebase 관련 데이터만 정리 (Firebase는 자동으로 관리)
+      const firebaseKeys = [
+        'firebase:host:morebooks-49f1d-default-rtdb.asia-southeast1.firebasedatabase.app',
+      ]
+      
+      firebaseKeys.forEach(key => {
+        localStorage.removeItem(key)
+      })
+      
+      // Firebase 관련 동적 키들도 정리
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('firebase:host:') || 
+            key.startsWith('firebase:authUser:') ||
+            key.startsWith('firebase:config:')) {
+          localStorage.removeItem(key)
+        }
+      })
+      
+      // sessionStorage에서 SSDM 관련 데이터 정리 (세션 기반이므로 탭 닫으면 자동 삭제)
+      const sessionKeysToRemove = [
+        'ssdm_connected',
+        'ssdm_jwt', 
+        'consentStatus',
+      ]
+      
+      sessionKeysToRemove.forEach(key => {
+        sessionStorage.removeItem(key)
+      })
+      
+      console.log('로그아웃 상태에서 스토리지 정리 완료 (localStorage: Firebase, sessionStorage: SSDM)')
+    } catch (error) {
+      console.error('스토리지 정리 중 오류:', error)
+    }
   }
 
   const login = async (email: string, password: string) => {
@@ -148,10 +188,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPrivacyJWT(null)
       setConsentStatus('none')
       
-      // SSDM 관련 로컬스토리지 정리
-      localStorage.removeItem('ssdm_connected')
-      localStorage.removeItem('ssdm_jwt')
-      localStorage.removeItem('consentStatus')
+      // 모든 관련 스토리지 데이터 정리
+      cleanupStorageOnLogout()
+      
+      console.log('로그아웃 완료 - 모든 로컬스토리지 데이터 정리됨')
     } catch (error: any) {
       throw new Error('로그아웃 중 오류가 발생했습니다')
     }
@@ -331,6 +371,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const shopId = emailParts[0] || user!.uid
       const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
       const mallId = PRIVACY_CONFIG.mallId
+      
+      if (!mallId) {
+        throw new Error('Mall ID가 설정되지 않았습니다.')
+      }
       
       // SSDM 연결 (API 라우트를 통해 연결)
       const { connectToSSDM } = await import('@/lib/ssdm-api')
