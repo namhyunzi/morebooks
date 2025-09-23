@@ -162,6 +162,12 @@ function CheckoutContent() {
         const parsedStatus = JSON.parse(savedConsentStatus)
         setConsentStatus(parsedStatus)
         
+        // JWT도 함께 복원
+        const savedJWT = sessionStorage.getItem('ssdm_jwt')
+        if (savedJWT) {
+          setSSMDJWT(savedJWT)
+        }
+        
         // 저장된 상태에 따라 showPreview 설정
         if (parsedStatus.status === 'connected') {
           // 항상 허용 만료 확인
@@ -596,90 +602,93 @@ function CheckoutContent() {
       
       // 동의 상태별 분기 처리
       if (consentStatus?.consentType === 'always' && consentStatus?.isActive === true) {
-        // 1번: 항상허용 사용자 - 팝업에서 받은 JWT가 있는지 확인
+        // 1번: 항상허용 사용자 - 세션에 JWT가 있으면 만료 확인
         if (ssdmJWT) {
-          // 팝업에서 받은 JWT 사용 (이번 주문에서 동의한 사람)
-          console.log('팝업에서 받은 JWT 사용')
-        } else {
-          // 이전에 항상허용한 사람 → JWT 발급
-          if (consentStatus?.expiresAt) {
-            const expiresAt = new Date(consentStatus.expiresAt)
-            const now = new Date()
-            if (now > expiresAt) {
-              alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
-              return
-            }
-          }
-          // 유효한 항상허용 → /api/issue-jwt 호출하여 택배사용 JWT 발급
           try {
-            const response = await fetch('/api/issue-jwt', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                shopId: user.email?.split('@')[0] || 'unknown',
-                mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-              })
-            })
-            const result = await response.json()
-            if (result.jwt) {
-              // 발급받은 JWT를 나중에 사용할 수 있도록 저장
-              setSSMDJWT(result.jwt)
-              console.log('항상허용 사용자 - 택배사용 JWT 발급 완료')
-            } else {
-              alert('택배사용 JWT 발급에 실패했습니다.')
+            const jwtPayload = JSON.parse(atob(ssdmJWT.split('.')[1]))
+            const now = Math.floor(Date.now() / 1000)
+            
+            if (now >= jwtPayload.exp) {
+              // JWT 만료됨 → alert + 세션 정리 + 자동 새로고침
+              alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
+              sessionStorage.removeItem('ssdm_jwt')
+              sessionStorage.removeItem('consentStatus')
+              window.location.reload()
               return
             }
           } catch (error) {
-            console.error('JWT 발급 오류:', error)
-            alert('택배사용 JWT 발급 중 오류가 발생했습니다.')
+            // JWT 디코딩 실패 → alert + 세션 정리 + 자동 새로고침
+            alert('개인정보 제공 동의 정보가 올바르지 않습니다. 다시 동의해주세요.')
+            sessionStorage.removeItem('ssdm_jwt')
+            sessionStorage.removeItem('consentStatus')
+            window.location.reload()
             return
           }
         }
-      } else if (consentStatus?.consentType === 'once') {
-        // 2번: 일회성 사용자 - 만료 시간 확인
+        
+        // 동의 만료 확인
         if (consentStatus?.expiresAt) {
           const expiresAt = new Date(consentStatus.expiresAt)
           const now = new Date()
           if (now > expiresAt) {
             alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
-            
-            // JWT 만료 시 정리
-            sessionStorage.removeItem('ssdm_jwt')
-            sessionStorage.removeItem('consentStatus')
-            
             return
           }
         }
         
-        // 유효한 일회성 사용자
-        if (ssdmJWT) {
-          // 팝업에서 받은 JWT가 있으면 사용
-          console.log('일회성 사용자 - 팝업에서 받은 JWT 사용')
-        } else {
-          // JWT가 없으면 발급 요청 (항상 허용과 동일한 로직)
-          try {
-            const response = await fetch('/api/issue-jwt', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                shopId: user.email?.split('@')[0] || 'unknown',
-                mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-              })
+        // 항상허용 → /api/issue-jwt 호출하여 택배사용 JWT 발급
+        try {
+          const response = await fetch('/api/issue-jwt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              shopId: user.email?.split('@')[0] || 'unknown',
+              mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
             })
-            const result = await response.json()
-            if (result.jwt) {
-              // 발급받은 JWT를 나중에 사용할 수 있도록 저장
-              setSSMDJWT(result.jwt)
-              console.log('일회성 사용자 - JWT 발급 완료')
+          })
+          const result = await response.json()
+          if (result.jwt) {
+            // 발급받은 JWT를 나중에 사용할 수 있도록 저장
+            setSSMDJWT(result.jwt)
+            console.log('항상허용 사용자 - 새 JWT 발급 완료')
+          } else {
+            alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
+            return
+          }
+        } catch (error) {
+          console.error('JWT 발급 오류:', error)
+          alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
+          return
+        }
+      } else if (consentStatus?.consentType === 'once') {
+        // 2번: 일회성 사용자 - 세션의 JWT 사용 + exp 확인
+        if (ssdmJWT) {
+          try {
+            // JWT 디코딩하여 만료시간 확인
+            const jwtPayload = JSON.parse(atob(ssdmJWT.split('.')[1]))
+            const now = Math.floor(Date.now() / 1000)
+            
+            if (now < jwtPayload.exp) {
+              // JWT 유효 → 세션의 JWT 사용
+              console.log('일회성 사용자 - 세션의 JWT 사용')
             } else {
-              alert('JWT 발급에 실패했습니다.')
+              // JWT 만료 → alert
+              alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
+              sessionStorage.removeItem('ssdm_jwt')
+              sessionStorage.removeItem('consentStatus')
               return
             }
           } catch (error) {
-            console.error('JWT 발급 오류:', error)
-            alert('JWT 발급 중 오류가 발생했습니다.')
+            // JWT 디코딩 실패 → alert
+            alert('개인정보 제공 동의 정보가 올바르지 않습니다. 다시 동의해주세요.')
+            sessionStorage.removeItem('ssdm_jwt')
+            sessionStorage.removeItem('consentStatus')
             return
           }
+        } else {
+          // JWT 없음 → alert
+          alert('개인정보 제공 동의가 필요합니다. 다시 연결해주세요.')
+          return
         }
       } else {
         // 3번: 거부/무효 사용자
