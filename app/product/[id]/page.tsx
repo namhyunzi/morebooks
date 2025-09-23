@@ -38,20 +38,32 @@ export default function ProductDetailPage() {
   }
 
   const handleAddToCart = async () => {
+    console.log('장바구니 추가 시도 - user:', user)
+    
     if (!user) {
+      console.log('사용자가 로그인되지 않음 - 로그인 페이지로 이동')
       toast.error('로그인이 필요합니다.')
       router.push('/login')
       return
     }
 
-    if (!book) return
+    if (!book) {
+      console.log('책 정보가 없음')
+      return
+    }
 
+    console.log('장바구니 추가 진행:', { userId: user.uid, bookId: book.id, quantity })
+    
     const result = await addToCart(user.uid, book.id, quantity)
+    console.log('장바구니 추가 결과:', result)
+    
     if (result.success) {
       // 헤더의 장바구니 수량 업데이트
       await updateCartCount()
       setShowCartPopup(true)
+      console.log('장바구니 추가 성공')
     } else {
+      console.error('장바구니 추가 실패:', result.error)
       toast.error('장바구니 추가에 실패했습니다.')
     }
   }

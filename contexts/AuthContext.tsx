@@ -86,10 +86,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false)
       if (user) {
         loadCartCount(user.uid)
-        // 기존 로그인 상태 복원 시에만 완료 상태 설정
-        if (!loading) {
-          setIsLoginComplete(true)
-        }
+        // 사용자가 로그인되어 있으면 완료 상태로 설정
+        setIsLoginComplete(true)
       } else {
         setCartItemCount(0)
         setIsLoginComplete(false)
