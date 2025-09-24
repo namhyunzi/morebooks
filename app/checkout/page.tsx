@@ -207,39 +207,37 @@ function CheckoutContent() {
     }
 
     // 팝업에서 오는 메시지 리스너 등록
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
     console.log("메세지 받음", event.data);
       // SSDM 동의 결과 처리
       if (event.data && event.data.type === 'consent_result') {
-        if (event.data.agreed) {
-          sessionStorage.setItem('ssdm_connected', 'true')
-          setConsentRejected(false)  // 거부 상태 해제
+        if (event.data.jwt) {
+          // JWT 디코딩해서 agreed 확인
+          const { decodeJWT } = await import('@/lib/jwt-utils')
+          const payload = decodeJWT(event.data.jwt)
           
-          // consentStatus 상태 업데이트
-          const newConsentStatus = {
-            status: 'connected',
-            consentType: event.data.consentType,
-            isActive: true,
-            expiresAt: event.data.expiresAt
+          if (payload && payload.agreed) {
+            // 동의 처리 - 세션에 agreed만 저장
+            sessionStorage.setItem('ssdm_agreed', 'true')
+            setSSMDConnected(true)
+            setUseSSDM(true)
+            setUseManualInput(false)
+            setShowPreview(true)
+            toast.success('개인정보 보호 시스템 연결 완료!')
+          } else {
+            // 거부 처리
+            sessionStorage.setItem('ssdm_agreed', 'false')
+            setConsentRejected(true)
+            toast.error('개인정보 제공을 거부하셨습니다.')
           }
-          setConsentStatus(newConsentStatus)
-          
-          // sessionStorage에도 저장
-          sessionStorage.setItem('consentStatus', JSON.stringify(newConsentStatus))
-          
-          // JWT 관련 코드 모두 제거
-          setSSMDConnected(true)
-          setUseSSDM(true)
-          setUseManualInput(false)
-          setShowPreview(true)  // 미리보기 버튼으로 변경
-          toast.success('개인정보 보호 시스템 연결 완료!')
-          
         } else {
-          setConsentRejected(true)  // 거부 상태 설정
+          // JWT가 없으면 거부
+          sessionStorage.setItem('ssdm_agreed', 'false')
+          setConsentRejected(true)
           toast.error('개인정보 제공을 거부하셨습니다.')
         }
         
-        // 동의/거부 결과 처리 후 팝업 닫기
+        // 팝업 닫기
         if (ssdmPopup && !ssdmPopup.closed) {
           ssdmPopup.close()
           setSSMDPopup(null)
