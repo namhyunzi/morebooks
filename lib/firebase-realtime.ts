@@ -372,7 +372,20 @@ export const processBankTransferOrder = async (
     // 주문번호 생성 (ORD-YYYYMMDD-001 형식)
     const today = new Date()
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '') // YYYYMMDD
-    const orderId = `ORD-${dateStr}-001` // 일단 001로 고정, 나중에 순번 로직 추가 가능
+    
+    // 해당 날짜의 주문 개수 조회해서 다음 순번 계산
+    const ordersRef = ref(realtimeDb, 'orders')
+    const snapshot = await get(ordersRef)
+    const allOrders = snapshot.val() || {}
+    
+    // 오늘 날짜로 시작하는 주문 ID들 필터링
+    const todayOrderIds = Object.keys(allOrders).filter(id => 
+      id.startsWith(`ORD-${dateStr}`)
+    )
+    
+    // 다음 순번 계산 (001, 002, 003...)
+    const nextSequence = String(todayOrderIds.length + 1).padStart(3, '0')
+    const orderId = `ORD-${dateStr}-${nextSequence}`
     
     // 주문 생성 (결제완료 상태로)
     const orderRef = ref(realtimeDb, `orders/${orderId}`)

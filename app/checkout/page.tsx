@@ -627,17 +627,22 @@ function CheckoutContent() {
         
         // 항상허용 → /api/issue-jwt 호출하여 택배사용 JWT 발급
         try {
+          // JWT 생성
+          const authJWT = await generateSSDMJWT({ 
+            shopId: user.email?.split('@')[0] || 'unknown',
+            mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+          })
+          
           const response = await fetch('/api/issue-jwt', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              shopId: user.email?.split('@')[0] || 'unknown',
-              mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-            })
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authJWT.jwt}`
+            }
           })
           const result = await response.json()
           if (result.jwt) {
-            // 발급받은 JWT를 나중에 사용할 수 있도록 저장
+            // JWT를 React 상태에 임시 저장
             setSSMDJWT(result.jwt)
             console.log('항상허용 사용자 - 새 JWT 발급 완료')
           } else {
@@ -677,6 +682,37 @@ function CheckoutContent() {
         } else {
           // JWT 없음 → alert
           alert('개인정보 제공 동의가 필요합니다. 다시 연결해주세요.')
+          return
+        }
+      } else if (sessionStorage.getItem('ssdm_agreed') === 'true') {
+        // 팝업에서 동의한 사용자 - JWT 생성해서 /api/issue-jwt 호출
+        try {
+          // JWT 생성
+          const authJWT = await generateSSDMJWT({ 
+            shopId: user.email?.split('@')[0] || 'unknown',
+            mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+          })
+          
+          const response = await fetch('/api/issue-jwt', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authJWT.jwt}`
+            }
+          })
+          
+          const result = await response.json()
+          if (result.jwt) {
+            // JWT를 React 상태에 임시 저장
+            setSSMDJWT(result.jwt)
+            console.log('팝업 동의 사용자 - 새 JWT 발급 완료')
+          } else {
+            alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
+            return
+          }
+        } catch (error) {
+          console.error('JWT 발급 오류:', error)
+          alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
           return
         }
       } else {

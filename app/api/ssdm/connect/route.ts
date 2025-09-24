@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
     // JWT 생성 (API Key로 서명)
     const jwt = generateJWT({ 
       shopId, 
-      mallId
+      mallId,
+      purpose: "delivery_delegation",
+      timestamp: new Date().toISOString()
     }, apiKey)
     
     console.log('JWT 생성 완료:', {
