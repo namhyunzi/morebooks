@@ -227,22 +227,13 @@ function CheckoutContent() {
           // sessionStorage에도 저장
           sessionStorage.setItem('consentStatus', JSON.stringify(newConsentStatus))
           
-          if (event.data.jwt) {
-            // "이번만 허용" 사용자 → JWT 저장
-            sessionStorage.setItem('ssdm_jwt', event.data.jwt)
-            setSSMDJWT(event.data.jwt)
-            setSSMDConnected(true)
-            setUseSSDM(true)
-            setUseManualInput(false)
-            setShowPreview(true)  // 미리보기 버튼으로 변경
-            toast.success('개인정보 보호 시스템 연결 완료!')
-          } else {
-            // "항상 허용" 사용자 → JWT 없이 연결만 완료 (미리보기 페이지로 이동하므로 토스트 불필요)
-            setSSMDConnected(true)
-            setUseSSDM(true)
-            setUseManualInput(false)
-            setShowPreview(true)  // 미리보기 버튼으로 변경
-          }
+          // JWT 관련 코드 모두 제거
+          setSSMDConnected(true)
+          setUseSSDM(true)
+          setUseManualInput(false)
+          setShowPreview(true)  // 미리보기 버튼으로 변경
+          toast.success('개인정보 보호 시스템 연결 완료!')
+          
         } else {
           setConsentRejected(true)  // 거부 상태 설정
           toast.error('개인정보 제공을 거부하셨습니다.')
