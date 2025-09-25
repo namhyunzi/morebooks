@@ -12,7 +12,7 @@ import { ChevronUp, HelpCircle, Smartphone, MapPin } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect, Suspense } from "react"
 import { useAuth } from "@/contexts/AuthContext"
-import { getCartItems, clearCart, processBankTransferOrder, CartItem } from "@/lib/firebase-realtime"
+import { getCartItems, clearCart, processBankTransferOrder, CartItem, getOrder } from "@/lib/firebase-realtime"
 import { getBookById, Book } from "@/lib/demo-books"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -680,14 +680,32 @@ function CheckoutContent() {
       )
       
       if (result.success) {
-        // 택배사에 배송 요청 전달
+        // 1. DB에서 주문 데이터 가져오기
+        const orderFromDB = await getOrder(result.orderId!)
+        
+        // 2. 필요한 데이터만 조합해서 택배사 API용 데이터 생성
+        const deliveryPayload = {
+          orderNumber: orderFromDB!.id,                    // DB에서
+          mallName: process.env.MALL_NAME,               // 환경변수
+          requestDate: new Date().toISOString(),         // API 호출시점
+          totalAmount: orderFromDB!.totalAmount,          // DB에서
+          items: orderFromDB!.items.map((item: any) => ({        // DB에서
+            title: item.title,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          deliveryMemo: orderFromDB!.deliveryMemo,         // DB에서
+          ssdmJWT: orderFromDB!.ssdmJWT                   // DB에서
+        }
+        
+        // 3. 조합된 데이터로 택배사 알림 전송
         try {
           const response = await fetch('/api/notify-delivery', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(orderData)
+            body: JSON.stringify(deliveryPayload)  // ← 조합된 데이터 전송
           })
           
           if (!response.ok) {

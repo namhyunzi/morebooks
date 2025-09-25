@@ -4,28 +4,11 @@ export async function POST(request: NextRequest) {
   try {
     console.log('=== 택배사 알림 API 시작 ===')
     
-    const orderData = await request.json()
-    console.log('받은 orderData:', JSON.stringify(orderData, null, 2))
+    const deliveryPayload = await request.json()  // ← 이미 조합된 데이터
+    console.log('받은 deliveryPayload:', JSON.stringify(deliveryPayload, null, 2))
     
     console.log('환경변수 확인:')
     console.log('DELIVERY_API_URL:', process.env.DELIVERY_API_URL)
-    console.log('MALL_NAME:', process.env.MALL_NAME)
-    
-    const deliveryPayload = {
-      orderNumber: orderData.id,
-      mallName: process.env.MALL_NAME, 
-      requestDate: new Date().toISOString(),
-      totalAmount: orderData.totalAmount,
-      items: orderData.items.map((item: any) => ({
-        title: item.title,
-        quantity: item.quantity,
-        price: item.price
-      })),
-      deliveryMemo: orderData.deliveryMemo,
-      ssdmJWT: orderData.ssdmJWT
-    }
-    
-    console.log('택배사용 페이로드:', JSON.stringify(deliveryPayload, null, 2))
     
     const targetUrl = `${process.env.DELIVERY_API_URL}/api/delivery-requests.json`
     console.log('요청할 URL:', targetUrl)
@@ -36,7 +19,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(deliveryPayload)
+      body: JSON.stringify(deliveryPayload)  // ← 조합된 데이터 그대로 전송
     })
 
     console.log('택배사 API 응답 상태:', response.status)
