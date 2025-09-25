@@ -680,32 +680,14 @@ function CheckoutContent() {
       )
       
       if (result.success) {
-        // 1. DB에서 주문 데이터 가져오기
-        const orderFromDB = await getOrder(result.orderId!)
-        
-        // 2. 필요한 데이터만 조합해서 택배사 API용 데이터 생성
-        const deliveryPayload = {
-          orderNumber: orderFromDB!.id,                    // DB에서
-          mallName: process.env.NEXT_PUBLIC_MALL_NAME, 
-          requestDate: new Date().toISOString(),         // API 호출시점
-          totalAmount: orderFromDB!.totalAmount,          // DB에서
-          items: orderFromDB!.items.map((item: any) => ({        // DB에서
-            title: item.title,
-            quantity: item.quantity,
-            price: item.price
-          })),
-          deliveryMemo: orderFromDB!.deliveryMemo,         // DB에서
-          ssdmJWT: orderFromDB!.ssdmJWT                   // DB에서
-        }
-        
-        // 3. 조합된 데이터로 택배사 알림 전송
+        // 1. orderId만 전달
         try {
           const response = await fetch('/api/notify-delivery', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(deliveryPayload)  // ← 조합된 데이터 전송
+            body: JSON.stringify({ orderId: result.orderId })  // ← orderId만 전달
           })
           
           if (!response.ok) {
