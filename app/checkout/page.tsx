@@ -567,7 +567,10 @@ function CheckoutContent() {
         }
         
         // 성공 시에만 헤더에서 JWT 받기
+        console.log('응답 상태:', response.status, response.ok)
+        console.log('Authorization 헤더:', response.headers.get('Authorization'))
         const jwtFromHeader = response.headers.get('Authorization')?.replace('Bearer ', '')
+        console.log('추출된 JWT:', jwtFromHeader)
         if (jwtFromHeader) {
           try {
             // JWT 검증 및 디코딩
