@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 
-export function generateJWT(payload: any, apiKey: string): string {
+export function generateJWT(payload: any, apiKey: string, options?: { expiresIn?: string }): string {
   try {
     console.log('JWT 생성 시작:', {
       payloadKeys: Object.keys(payload),
@@ -10,8 +10,8 @@ export function generateJWT(payload: any, apiKey: string): string {
     
     const token = jwt.sign(payload, apiKey, {
       algorithm: 'HS256',
-      expiresIn: '5m' // 5분
-    })
+      expiresIn: options?.expiresIn || '15m'
+    } as jwt.SignOptions)
     
     console.log('JWT 생성 성공:', {
       tokenLength: token.length,

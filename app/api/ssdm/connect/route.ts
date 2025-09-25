@@ -30,9 +30,10 @@ export async function POST(request: NextRequest) {
     const jwt = generateJWT({ 
       shopId, 
       mallId,
-      purpose: "delivery_delegation",
       timestamp: new Date().toISOString()
-    }, apiKey)
+    }, apiKey, {
+      expiresIn: '15m' // 15분
+    })
     
     console.log('JWT 생성 완료:', {
       shopId,
@@ -43,11 +44,7 @@ export async function POST(request: NextRequest) {
     
     // JWT 반환
     return NextResponse.json({ 
-      success: true,
-      jwt,
-      shopId,
-      mallId,
-      expiresIn: 5 * 60 // 5분 (초 단위)
+      jwt
     })
 
   } catch (error) {

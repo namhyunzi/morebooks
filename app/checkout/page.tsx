@@ -99,12 +99,9 @@ function CheckoutContent() {
         const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.PRIVACY_SYSTEM_API_KEY}`,
+            'Authorization': `Bearer ${jwtToken}`,
             'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            jwt: jwtToken
-          })
+          }
         })
         
         console.log('API 응답 상태:', response.status, response.statusText)
@@ -114,38 +111,18 @@ function CheckoutContent() {
         console.log('API 응답 데이터:', result)
         
         if (result.status === 'connected') {
-          // 항상 허용 만료 확인
-          if (result.consentType === 'always' && result.expiresAt) {
-            const expiresAt = new Date(result.expiresAt)
-            const now = new Date()
-            if (now > expiresAt) {
-              setShowPreview(false)  // 연결하기 버튼
-              setConsentStatus(result)
-              sessionStorage.setItem('consentStatus', JSON.stringify(result))
-              return
-            }
-          }
-          
-          // 연결 해제 확인
-          if (result.isActive === false) {
-            setShowPreview(false)  // 연결하기 버튼
-            setConsentStatus(result)
-            sessionStorage.setItem('consentStatus', JSON.stringify(result))
-            return
-          }
-          
-          // 정상 동의 상태
+          // 항상 허용 + 유효함
           setShowPreview(true)   // 미리보기 버튼
           setConsentStatus(result)
           setSSMDConnected(true)  // SSDM 연결 상태 설정
           sessionStorage.setItem('consentStatus', JSON.stringify(result))
           sessionStorage.setItem('ssdm_connected', 'true')
         } else {
+          // need_connect (모든 다른 경우)
           setShowPreview(false)  // 연결하기 버튼
           setSSMDConnected(false)  // SSDM 연결 상태 해제
           sessionStorage.removeItem('consentStatus')
           sessionStorage.removeItem('ssdm_connected')
-          sessionStorage.removeItem('ssdm_jwt')
         }
       } catch (error) {
         setShowPreview(false)
@@ -162,11 +139,6 @@ function CheckoutContent() {
         const parsedStatus = JSON.parse(savedConsentStatus)
         setConsentStatus(parsedStatus)
         
-        // JWT도 함께 복원
-        const savedJWT = sessionStorage.getItem('ssdm_jwt')
-        if (savedJWT) {
-          setSSMDJWT(savedJWT)
-        }
         
         // 저장된 상태에 따라 showPreview 설정
         if (parsedStatus.status === 'connected') {
@@ -211,31 +183,13 @@ function CheckoutContent() {
     console.log("메세지 받음", event.data);
       // SSDM 동의 결과 처리
       if (event.data && event.data.type === 'consent_result') {
-        if (event.data.jwt) {
-          // JWT 디코딩해서 agreed 확인
-          const { decodeJWT } = await import('@/lib/jwt-utils')
-          const payload = decodeJWT(event.data.jwt)
-          
-          if (payload && payload.agreed) {
-            // 동의 처리 - 세션에 agreed만 저장
-            sessionStorage.setItem('ssdm_agreed', 'true')
-            setSSMDConnected(true)
-            setUseSSDM(true)
-            setUseManualInput(false)
-            setShowPreview(true)
-            toast.success('개인정보 보호 시스템 연결 완료!')
-          } else {
-            // 거부 처리
-            sessionStorage.setItem('ssdm_agreed', 'false')
-            setConsentRejected(true)
-            toast.error('개인정보 제공을 거부하셨습니다.')
-          }
-        } else {
-          // JWT가 없으면 거부
-          sessionStorage.setItem('ssdm_agreed', 'false')
-          setConsentRejected(true)
-          toast.error('개인정보 제공을 거부하셨습니다.')
-        }
+        // 동의 처리 - JWT 디코딩 없이 바로 처리
+        sessionStorage.setItem('ssdm_agreed', 'true')
+        setSSMDConnected(true)
+        setUseSSDM(true)
+        setUseManualInput(false)
+        setShowPreview(true)
+        toast.success('개인정보 보호 시스템 연결 완료!')
         
         // 팝업 닫기
         if (ssdmPopup && !ssdmPopup.closed) {
@@ -243,10 +197,8 @@ function CheckoutContent() {
           setSSMDPopup(null)
         }
       } else if (event.data && event.data.type === 'consent_rejected') {
-        // 거부 상태 저장
+        // 거부 처리 
         setConsentRejected(true)
-        
-        // 거부 결과 처리
         toast.error('개인정보 제공을 거부하셨습니다.')
         
         // 팝업 닫기
@@ -310,32 +262,27 @@ function CheckoutContent() {
       const mallId = process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
       
       // JWT 생성
-      const jwt = require('jsonwebtoken')
-      const jwtToken = jwt.sign(
-        { shopId, mallId },
-        process.env.PRIVACY_SYSTEM_API_KEY!,
-        { expiresIn: '5m' }
-      )
+      const jwtResult = await generateSSDMJWT({ shopId, mallId })
+      const jwtToken = jwtResult.jwt
 
       // SSDM 측 API로 직접 호출
       const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.PRIVACY_SYSTEM_API_KEY}`,
+          'Authorization': `Bearer ${jwtToken}`,
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          jwt: jwtToken
-        })
+        }
       })
       
       const result = await response.json()
       
       if (result.status === 'connected') {
+        // 항상 허용 + 유효함
         setShowPreview(true)
         setConsentStatus(result)
         setSSMDConnected(true)  // SSDM 연결 상태 설정
       } else {
+        // need_connect (모든 다른 경우)
         setShowPreview(false)
         setSSMDConnected(false)  // SSDM 연결 상태 해제
       }
@@ -583,141 +530,63 @@ function CheckoutContent() {
         
         // 연결 해제 시 정리
         sessionStorage.removeItem('ssdm_connected')
-        sessionStorage.removeItem('ssdm_jwt')
         sessionStorage.removeItem('consentStatus')
         
         return
       }
       
-      // 동의 상태별 분기 처리
-      if (consentStatus?.consentType === 'always' && consentStatus?.isActive === true) {
-        // 1번: 항상허용 사용자 - 세션에 JWT가 있으면 만료 확인
-        if (ssdmJWT) {
-          try {
-            const jwtPayload = JSON.parse(atob(ssdmJWT.split('.')[1]))
-            const now = Math.floor(Date.now() / 1000)
-            
-            if (now >= jwtPayload.exp) {
-              // JWT 만료됨 → alert + 세션 정리 + 자동 새로고침
-              alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
-              sessionStorage.removeItem('ssdm_jwt')
-              sessionStorage.removeItem('consentStatus')
-              window.location.reload()
-              return
-            }
-          } catch (error) {
-            // JWT 디코딩 실패 → alert + 세션 정리 + 자동 새로고침
-            alert('개인정보 제공 동의 정보가 올바르지 않습니다. 다시 동의해주세요.')
-            sessionStorage.removeItem('ssdm_jwt')
-            sessionStorage.removeItem('consentStatus')
-            window.location.reload()
-            return
-          }
-        }
+      // 모든 경우에서 /api/issue-partner-jwt 호출하여 택배사용 JWT 발급
+      try {
+        // JWT 생성
+        const authJWT = await generateSSDMJWT({ 
+          shopId: user.email?.split('@')[0] || 'unknown',
+          mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+        })
         
-        // 동의 만료 확인
-        if (consentStatus?.expiresAt) {
-          const expiresAt = new Date(consentStatus.expiresAt)
-          const now = new Date()
-          if (now > expiresAt) {
-            alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
-            return
+        const response = await fetch('/api/issue-partner-jwt', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authJWT.jwt}`
           }
-        }
+        })
         
-        // 항상허용 → /api/issue-jwt 호출하여 택배사용 JWT 발급
-        try {
-          // JWT 생성
-          const authJWT = await generateSSDMJWT({ 
-            shopId: user.email?.split('@')[0] || 'unknown',
-            mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-          })
-          
-          const response = await fetch('/api/issue-jwt', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authJWT.jwt}`
-            }
-          })
-          const result = await response.json()
-          if (result.jwt) {
-            // JWT를 React 상태에 임시 저장
-            setSSMDJWT(result.jwt)
-            console.log('항상허용 사용자 - 새 JWT 발급 완료')
-          } else {
-            alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
-            return
-          }
-        } catch (error) {
-          console.error('JWT 발급 오류:', error)
-          alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
+        // HTTP 상태 코드 확인
+        if (!response.ok) {
+          const errorData = await response.json()
+          alert(errorData.error || '개인정보 보호 시스템 연결에 문제가 발생했습니다.')
+          window.location.reload()  // 페이지 새로고침 추가
           return
         }
-      } else if (consentStatus?.consentType === 'once') {
-        // 2번: 일회성 사용자 - 세션의 JWT 사용 + exp 확인
-        if (ssdmJWT) {
+        
+        // 성공 시에만 헤더에서 JWT 받기
+        const jwtFromHeader = response.headers.get('Authorization')?.replace('Bearer ', '')
+        if (jwtFromHeader) {
           try {
-            // JWT 디코딩하여 만료시간 확인
-            const jwtPayload = JSON.parse(atob(ssdmJWT.split('.')[1]))
-            const now = Math.floor(Date.now() / 1000)
+            // JWT 검증 및 디코딩
+            const { verifyJWT } = await import('@/lib/jwt-utils')
+            const decoded = verifyJWT(jwtFromHeader, process.env.PRIVACY_SYSTEM_API_KEY!)
             
-            if (now < jwtPayload.exp) {
-              // JWT 유효 → 세션의 JWT 사용
-              console.log('일회성 사용자 - 세션의 JWT 사용')
+            if (decoded && decoded.delegateJwt) {
+              // 택배사용 JWT만 저장
+              setSSMDJWT(decoded.delegateJwt)
+              console.log('택배사용 JWT 발급 완료:', decoded.delegateJwt.substring(0, 50) + '...')
             } else {
-              // JWT 만료 → alert
-              alert('개인정보 제공 동의가 만료되었습니다. 다시 동의해주세요.')
-              sessionStorage.removeItem('ssdm_jwt')
-              sessionStorage.removeItem('consentStatus')
+              alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
               return
             }
           } catch (error) {
-            // JWT 디코딩 실패 → alert
-            alert('개인정보 제공 동의 정보가 올바르지 않습니다. 다시 동의해주세요.')
-            sessionStorage.removeItem('ssdm_jwt')
-            sessionStorage.removeItem('consentStatus')
+            console.error('JWT 검증 실패:', error)
+            alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
             return
           }
         } else {
-          // JWT 없음 → alert
-          alert('개인정보 제공 동의가 필요합니다. 다시 연결해주세요.')
-          return
-        }
-      } else if (sessionStorage.getItem('ssdm_agreed') === 'true') {
-        // 팝업에서 동의한 사용자 - JWT 생성해서 /api/issue-jwt 호출
-        try {
-          // JWT 생성
-          const authJWT = await generateSSDMJWT({ 
-            shopId: user.email?.split('@')[0] || 'unknown',
-            mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-          })
-          
-          const response = await fetch('/api/issue-jwt', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authJWT.jwt}`
-            }
-          })
-          
-          const result = await response.json()
-          if (result.jwt) {
-            // JWT를 React 상태에 임시 저장
-            setSSMDJWT(result.jwt)
-            console.log('팝업 동의 사용자 - 새 JWT 발급 완료')
-          } else {
-            alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
-            return
-          }
-        } catch (error) {
-          console.error('JWT 발급 오류:', error)
           alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
           return
         }
-      } else {
-        // 3번: 거부/무효 사용자
-        alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
+      } catch (error) {
+        console.error('JWT 발급 오류:', error)
+        alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
         return
       }
     } else {
@@ -778,6 +647,12 @@ function CheckoutContent() {
         await updateCartCount()
         
         toast.success('주문이 완료되었습니다!')
+        
+        // 주문 완료 후 sessionStorage 정리
+        sessionStorage.removeItem('ssdm_agreed')
+        sessionStorage.removeItem('consentStatus')
+        sessionStorage.removeItem('ssdm_connected')
+        
         router.push(`/payment-success?orderId=${result.orderId}`)
       } else {
         toast.error(typeof result.error === 'string' ? result.error : '주문 처리에 실패했습니다.')
