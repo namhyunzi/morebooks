@@ -13,6 +13,7 @@ import Link from "next/link"
 import { useState, useEffect, Suspense } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { getCartItems, clearCart, processBankTransferOrder, CartItem } from "@/lib/firebase-realtime"
+import { notifyDeliveryService } from "@/lib/delivery-api"
 import { getBookById, Book } from "@/lib/demo-books"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -680,6 +681,15 @@ function CheckoutContent() {
       )
       
       if (result.success) {
+        // 택배사에 배송 요청 전달
+        try {
+          await notifyDeliveryService(orderData)
+          console.log('택배사 알림 성공')
+        } catch (error) {
+          console.error('택배사 알림 실패:', error)
+          // 택배사 알림 실패해도 주문은 완료된 상태이므로 계속 진행
+        }
+
         // 장바구니 비우기
         await clearCart(user.uid)
         // 헤더의 장바구니 수량 업데이트
