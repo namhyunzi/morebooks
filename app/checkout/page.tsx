@@ -13,7 +13,6 @@ import Link from "next/link"
 import { useState, useEffect, Suspense } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { getCartItems, clearCart, processBankTransferOrder, CartItem } from "@/lib/firebase-realtime"
-import { notifyDeliveryService } from "@/lib/delivery-api"
 import { getBookById, Book } from "@/lib/demo-books"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -683,7 +682,18 @@ function CheckoutContent() {
       if (result.success) {
         // 택배사에 배송 요청 전달
         try {
-          await notifyDeliveryService(orderData)
+          const response = await fetch('/api/notify-delivery', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+          })
+          
+          if (!response.ok) {
+            throw new Error('택배사 알림 실패')
+          }
+          
           console.log('택배사 알림 성공')
         } catch (error) {
           console.error('택배사 알림 실패:', error)
