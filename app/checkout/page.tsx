@@ -544,7 +544,7 @@ function CheckoutContent() {
           mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
         })
         
-        const response = await fetch('/api/issue-partner-jwt', {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/issue-partner-jwt`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
