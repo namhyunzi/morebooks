@@ -682,7 +682,7 @@ function CheckoutContent() {
       if (result.success) {
         // 택배사에 배송 요청 전달
         try {
-          const response = await fetch('/api/delivery-requests', {
+          const response = await fetch('/api/notify-delivery', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
