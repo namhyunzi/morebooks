@@ -573,20 +573,33 @@ function CheckoutContent() {
         console.log('추출된 JWT:', jwtFromHeader)
         if (jwtFromHeader) {
           try {
-            // JWT 검증 및 디코딩
-            const { verifyJWT } = await import('@/lib/jwt-utils')
-            const decoded = verifyJWT(jwtFromHeader, process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY!)
+            // 우리 서버 API로 JWT 검증 요청
+            const verifyResponse = await fetch('/api/verify-partner-jwt', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ jwt: jwtFromHeader })
+            })
+
+            if (!verifyResponse.ok) {
+              const errorData = await verifyResponse.json()
+              console.error('JWT 검증 API 에러:', errorData)
+              alert(`JWT 검증에 실패했습니다: ${errorData.error}`)
+              return
+            }
+
+            const { delegateJwt } = await verifyResponse.json()
             
             console.log('--- 디버깅 시작 ---')
-            console.log('현재 decoded 객체:', decoded)
-            console.log('decoded.delegateJwt 값:', decoded?.delegateJwt)
-            console.log('decoded.delegateJwt 존재 여부 (boolean):', !!decoded?.delegateJwt)
+            console.log('받은 delegateJwt:', delegateJwt)
+            console.log('delegateJwt 존재 여부 (boolean):', !!delegateJwt)
             console.log('--- 디버깅 종료 ---')
             
-            if (decoded && decoded.delegateJwt) {
+            if (delegateJwt) {
               // 택배사용 JWT만 저장
-              setSSMDJWT(decoded.delegateJwt)
-              console.log('택배사용 JWT 발급 완료:', decoded.delegateJwt.substring(0, 50) + '...')
+              setSSMDJWT(delegateJwt)
+              console.log('택배사용 JWT 발급 완료:', delegateJwt.substring(0, 50) + '...')
             } else {
               alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
               return
