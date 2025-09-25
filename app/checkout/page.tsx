@@ -686,7 +686,7 @@ function CheckoutContent() {
         // 2. 필요한 데이터만 조합해서 택배사 API용 데이터 생성
         const deliveryPayload = {
           orderNumber: orderFromDB!.id,                    // DB에서
-          mallName: process.env.MALL_NAME,               // 환경변수
+          mallName: process.env.NEXT_PUBLIC_MALL_NAME, 
           requestDate: new Date().toISOString(),         // API 호출시점
           totalAmount: orderFromDB!.totalAmount,          // DB에서
           items: orderFromDB!.items.map((item: any) => ({        // DB에서
