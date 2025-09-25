@@ -58,6 +58,13 @@ function CheckoutContent() {
   const [consentResult, setConsentResult] = useState<any>(null)
   const [consentRejected, setConsentRejected] = useState(false)
   
+  // 배송 메모 옵션 매핑
+  const deliveryMemoOptions: { [key: string]: string } = {
+    'door': '문 앞에 놓아주세요',
+    'contact': '부재 시 연락 부탁드려요', 
+    'call': '배송 전 미리 연락해 주세요'
+  }
+
   // 배송 메모 상태
   const [deliveryMemo, setDeliveryMemo] = useState("door")
   
@@ -652,7 +659,7 @@ function CheckoutContent() {
         // SSDM에서 개인정보 중개하므로 shippingAddress 제거
         shippingFee: 0, // 배송비 무료
         finalAmount: totalAmount, // 배송비 무료이므로 상품금액과 동일
-        deliveryMemo: deliveryMemo // 배송 메모 추가
+        deliveryMemo: deliveryMemoOptions[deliveryMemo] // 배송 메모 추가 
       }
 
       // SSDM JWT 정보 준비 - 변수로 delegateJwt 저장
