@@ -536,6 +536,12 @@ function CheckoutContent() {
         return
       }
       
+      // 무통장입금 유효성 검사
+      if (!selectedBank || !depositorName) {
+        alert('무통장입금 정보를 입력해주세요.\n\n- 은행 선택\n- 입금자 성명')
+        return
+      }
+      
       // 모든 경우에서 /api/issue-partner-jwt 호출하여 택배사용 JWT 발급
       try {
         // JWT 생성
@@ -593,11 +599,6 @@ function CheckoutContent() {
     } else {
       // 둘 다 선택되지 않은 경우
       alert('개인정보 입력 방식을 선택해주세요.\n\n• 개인정보 보호 시스템 사용\n• 직접 입력하기')
-      return
-    }
-
-    if (!selectedBank || !depositorName) {
-      alert('무통장입금 정보를 입력해주세요.\n\n- 은행 선택\n- 입금자 성명')
       return
     }
 
