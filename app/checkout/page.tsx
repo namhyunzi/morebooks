@@ -58,6 +58,9 @@ function CheckoutContent() {
   const [consentResult, setConsentResult] = useState<any>(null)
   const [consentRejected, setConsentRejected] = useState(false)
   
+  // 배송 메모 상태
+  const [deliveryMemo, setDeliveryMemo] = useState("door")
+  
   // 개인정보 입력 방식 선택 상태
   const [useSSDM, setUseSSDM] = useState(true)  // 기본적으로 개인정보 보호 시스템 사용
   const [useManualInput, setUseManualInput] = useState(false)  // 기본적으로 직접 입력 비활성화
@@ -648,7 +651,8 @@ function CheckoutContent() {
         paymentStatus: 'completed' as const,
         // SSDM에서 개인정보 중개하므로 shippingAddress 제거
         shippingFee: 0, // 배송비 무료
-        finalAmount: totalAmount // 배송비 무료이므로 상품금액과 동일
+        finalAmount: totalAmount, // 배송비 무료이므로 상품금액과 동일
+        deliveryMemo: deliveryMemo // 배송 메모 추가
       }
 
       // SSDM JWT 정보 준비 - 변수로 delegateJwt 저장
@@ -1012,6 +1016,27 @@ function CheckoutContent() {
                       disabled={!useManualInput}
                     />
                   </div>
+                </div>
+
+              </div>
+
+              {/* 구분선 */}
+              <div className="border-t border-gray-200 my-6"></div>
+
+              {/* 배송 메모 */}
+              <div className="flex items-center">
+                <Label className="w-20 text-sm font-medium text-gray-700">배송 메모</Label>
+                <div className="w-80">
+                  <Select value={deliveryMemo} onValueChange={setDeliveryMemo}>
+                    <SelectTrigger className="w-full border-gray-300 focus:border-[#A2B38B] focus:ring-[#A2B38B]">
+                      <SelectValue placeholder="배송 메모를 선택해주세요" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="door">문 앞에 놓아주세요</SelectItem>
+                      <SelectItem value="contact">부재 시 연락 부탁드려요</SelectItem>
+                      <SelectItem value="call">배송 전 미리 연락해 주세요</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

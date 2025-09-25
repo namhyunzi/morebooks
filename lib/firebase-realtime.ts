@@ -39,6 +39,8 @@ export interface Order {
   ssdmJWT?: string // SSDM에서 받은 JWT 토큰 (JWT 안에 shopId, mallId 포함)
   isDepositReceived: boolean // 입금 여부 (기본값: true로 설정)
   isCancelled: boolean // 취소 여부 (기본값: false)
+  // 배송 관련 필드
+  deliveryMemo?: string // 배송 메모
 }
 
 export interface UserProfile {
