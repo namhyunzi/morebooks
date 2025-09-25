@@ -575,7 +575,7 @@ function CheckoutContent() {
           try {
             // JWT 검증 및 디코딩
             const { verifyJWT } = await import('@/lib/jwt-utils')
-            const decoded = verifyJWT(jwtFromHeader, process.env.PRIVACY_SYSTEM_API_KEY!)
+            const decoded = verifyJWT(jwtFromHeader, process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY!)
             
             console.log('--- 디버깅 시작 ---')
             console.log('현재 decoded 객체:', decoded)

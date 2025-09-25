@@ -14,15 +14,15 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('환경변수 확인:', {
-      PRIVACY_SYSTEM_API_KEY: process.env.PRIVACY_SYSTEM_API_KEY ? '설정됨' : '없음'
+      NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY: process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY ? '설정됨' : '없음'
     })
 
     // API 키 (Vercel 환경변수에서 가져오기)
-    const apiKey = process.env.PRIVACY_SYSTEM_API_KEY
+    const apiKey = process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY
     
     if (!apiKey) {
       return NextResponse.json({ 
-        error: 'PRIVACY_SYSTEM_API_KEY environment variable is not set' 
+        error: 'NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY environment variable is not set' 
       }, { status: 500 })
     }
     
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       details: errorMessage,
       stack: errorStack,
       debug: {
-        hasApiKey: !!process.env.PRIVACY_SYSTEM_API_KEY
+        hasApiKey: !!process.env.NEXT_PUBLIC_PRIVACY_SYSTEM_API_KEY
       }
     }, { status: 500 })
   }
