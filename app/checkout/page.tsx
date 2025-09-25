@@ -574,6 +574,12 @@ function CheckoutContent() {
             const { verifyJWT } = await import('@/lib/jwt-utils')
             const decoded = verifyJWT(jwtFromHeader, process.env.PRIVACY_SYSTEM_API_KEY!)
             
+            console.log('--- 디버깅 시작 ---')
+            console.log('현재 decoded 객체:', decoded)
+            console.log('decoded.delegateJwt 값:', decoded?.delegateJwt)
+            console.log('decoded.delegateJwt 존재 여부 (boolean):', !!decoded?.delegateJwt)
+            console.log('--- 디버깅 종료 ---')
+            
             if (decoded && decoded.delegateJwt) {
               // 택배사용 JWT만 저장
               setSSMDJWT(decoded.delegateJwt)
