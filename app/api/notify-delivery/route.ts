@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
       ssdmJWT: orderData.ssdmJWT
     }
 
-    // 택배사 Firebase에 직접 저장
-    const response = await fetch(`${process.env.DELIVERY_API_URL}/delivery-requests.json`, {
+    // 택배사 API로 전송
+    const response = await fetch(`${process.env.DELIVERY_API_URL}/api/delivery-requests.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
