@@ -468,13 +468,13 @@ function CheckoutContent() {
   }
 
 
-  // delegateJwt 저장용 변수
-  let savedDelegateJwt: string | null = null
-
   const handleOrder = async () => {
     if (!user) {
       return
     }
+
+    // delegateJwt 저장용 변수 (함수 시작 시 초기화)
+    let savedDelegateJwt: string | null = null
 
     // 개인정보 입력 방식에 따른 검증
     if (useManualInput) {
