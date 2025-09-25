@@ -184,6 +184,7 @@ function CheckoutContent() {
       // SSDM 동의 결과 처리
       if (event.data && event.data.type === 'consent_result') {
         // 동의 처리 - JWT 디코딩 없이 바로 처리
+        setConsentRejected(false)  // 거부 상태 초기화
         sessionStorage.setItem('ssdm_agreed', 'true')
         setSSMDConnected(true)
         setUseSSDM(true)
