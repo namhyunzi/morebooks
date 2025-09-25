@@ -468,6 +468,9 @@ function CheckoutContent() {
   }
 
 
+  // delegateJwt 저장용 변수
+  let savedDelegateJwt: string | null = null
+
   const handleOrder = async () => {
     if (!user) {
       return
@@ -599,6 +602,7 @@ function CheckoutContent() {
             if (delegateJwt) {
               // 택배사용 JWT만 저장
               setSSMDJWT(delegateJwt)
+              savedDelegateJwt = delegateJwt  // 변수에도 저장
               console.log('택배사용 JWT 발급 완료:', delegateJwt.substring(0, 50) + '...')
             } else {
               alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
@@ -647,13 +651,13 @@ function CheckoutContent() {
         finalAmount: totalAmount // 배송비 무료이므로 상품금액과 동일
       }
 
-      // SSDM JWT 정보 준비 - 동의 상태별로 설정된 JWT 사용
+      // SSDM JWT 정보 준비 - 변수로 delegateJwt 저장
       let jwtToStore: string | undefined = undefined
       
-      if (useSSDM && ssdmJWT) {
-        // 위에서 동의 상태별로 설정된 JWT 사용
-        jwtToStore = ssdmJWT
-        console.log('설정된 JWT 사용:', ssdmJWT)
+      if (useSSDM && savedDelegateJwt) {
+        // 저장된 delegateJwt 사용
+        jwtToStore = savedDelegateJwt
+        console.log('설정된 JWT 사용:', savedDelegateJwt)
       }
 
       // 주문 처리 (JWT 정보 포함)
