@@ -142,10 +142,44 @@ function CheckoutContent() {
 
     checkConsentStatus()
     
-    // 세션 스토리지 정리 후 API 호출로 최신 상태 확인
-    sessionStorage.removeItem('consentStatus')
-    sessionStorage.removeItem('ssdm_connected')
-    sessionStorage.removeItem('ssdm_agreed')
+    // sessionStorage에서 저장된 동의 상태 복원
+    const savedConsentStatus = sessionStorage.getItem('consentStatus')
+    if (savedConsentStatus) {
+      try {
+        const parsedStatus = JSON.parse(savedConsentStatus)
+        setConsentStatus(parsedStatus)
+        
+        
+        // 저장된 상태에 따라 showPreview 설정
+        if (parsedStatus.status === 'connected') {
+          // 항상 허용 만료 확인
+          if (parsedStatus.consentType === 'always' && parsedStatus.expiresAt) {
+            const expiresAt = new Date(parsedStatus.expiresAt)
+            const now = new Date()
+            if (now > expiresAt) {
+              setShowPreview(false)  // 연결하기 버튼
+              return
+            }
+          }
+          
+          // 연결 해제 확인
+          if (parsedStatus.isActive === false) {
+            setShowPreview(false)  // 연결하기 버튼
+            return
+          }
+          
+          // 정상 동의 상태
+          setShowPreview(true)   // 미리보기 버튼
+          setSSMDConnected(true)  // SSDM 연결 상태 설정
+        } else {
+          setShowPreview(false)  // 연결하기 버튼
+          setSSMDConnected(false)  // SSDM 연결 상태 해제
+        }
+      } catch (error) {
+        console.error('저장된 동의 상태 파싱 오류:', error)
+        sessionStorage.removeItem('consentStatus')
+      }
+    }
     
     // 앱에서 돌아온 데이터 확인
     if (searchParams) {
@@ -189,36 +223,6 @@ function CheckoutContent() {
           ssdmPopup.close()
           setSSMDPopup(null)
         }
-      } else if (event.data && event.data.type === 'logout_success') {
-        // 로그아웃 처리
-        console.log('팝업에서 로그아웃 감지 - 상태 초기화 시작')
-        
-        // 세션 스토리지 정리
-        sessionStorage.removeItem('consentStatus')
-        sessionStorage.removeItem('ssdm_connected')
-        sessionStorage.removeItem('ssdm_agreed')
-        
-        // 상태 초기화
-        setShowPreview(false)
-        setSSMDConnected(false)
-        setConsentStatus(null)
-        setConsentRejected(false)
-        
-        // API 재호출
-        await checkConsentStatus()
-        
-        console.log('로그아웃 상태 초기화 완료')
-      } else if (event.data && event.data.type === 'login_success') {
-        // 로그인 처리 - 항상 허용이면서 로그인 안되어있던 사람만 변경
-        console.log('팝업에서 로그인 감지 - 상태 변경 시작')
-        
-        // 항상 허용이면서 로그인 안되어있던 사람만 미리보기 버튼으로 변경
-        if (consentStatus?.consentType === 'always' && !consentStatus?.isLoggedIn) {
-          setShowPreview(true)
-          setSSMDConnected(true)
-        }
-        
-        console.log('로그인 상태 UI 업데이트 완료')
       }
     }
 
@@ -262,11 +266,7 @@ function CheckoutContent() {
   }
 
   const checkConsentStatus = async () => {
-    if (!user) {
-      setShowPreview(false)
-      setSSMDConnected(false)
-      return
-    }
+    if (!user) return
     
     try {
       const shopId = user.email?.split('@')[0] || 'unknown'
@@ -287,13 +287,13 @@ function CheckoutContent() {
       
       const result = await response.json()
       
-      if (result.status === 'connected' && result.isLoggedIn) {
-        // 항상 허용 + 로그인됨
+      if (result.status === 'connected') {
+        // 항상 허용 + 유효함
         setShowPreview(true)
         setConsentStatus(result)
         setSSMDConnected(true)  // SSDM 연결 상태 설정
       } else {
-        // need_connect 또는 로그인 안됨
+        // need_connect (모든 다른 경우)
         setShowPreview(false)
         setSSMDConnected(false)  // SSDM 연결 상태 해제
       }
