@@ -94,58 +94,8 @@ function CheckoutContent() {
     loadCartItems()
     
     // 2. useEffect 수정 - 페이지 진입 시 동의 상태 확인
-    const checkConsentStatus = async () => {
-      if (!user) return
-      
-      try {
-        const shopId = user.email?.split('@')[0] || 'unknown'
-        const mallId = process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-        
-        // JWT 생성
-        const jwtResult = await generateSSDMJWT({ shopId, mallId })
-        const jwtToken = jwtResult.jwt
-
-        // SSDM 측 API로 직접 호출
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${jwtToken}`,
-            'Content-Type': 'application/json'
-          }
-        })
-        
-        console.log('API 응답 상태:', response.status, response.statusText)
-        console.log('API 응답 헤더:', response.headers)
-        
-        const result = await response.json()
-        console.log('API 응답 데이터:', result)
-        
-        if (result.status === 'connected') {
-          // 항상 허용 + 유효함
-          setShowPreview(true)   // 미리보기 버튼
-          setConsentStatus(result)
-          setSSMDConnected(true)  // SSDM 연결 상태 설정
-          sessionStorage.setItem('consentStatus', JSON.stringify(result))
-          sessionStorage.setItem('ssdm_connected', 'true')
-        } else {
-          // need_connect (모든 다른 경우)
-          setShowPreview(false)  // 연결하기 버튼
-          setSSMDConnected(false)  // SSDM 연결 상태 해제
-          sessionStorage.removeItem('consentStatus')
-          sessionStorage.removeItem('ssdm_connected')
-        }
-      } catch (error) {
-        setShowPreview(false)
-        setSSMDConnected(false)  // SSDM 연결 상태 해제
-      }
-    }
-
     checkConsentStatus()
     
-    // 세션 스토리지 정리 후 API 호출로 최신 상태 확인
-    sessionStorage.removeItem('consentStatus')
-    sessionStorage.removeItem('ssdm_connected')
-    sessionStorage.removeItem('ssdm_agreed')
     
     // 앱에서 돌아온 데이터 확인
     if (searchParams) {
