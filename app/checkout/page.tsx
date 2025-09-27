@@ -409,21 +409,46 @@ function CheckoutContent() {
         '/info-preview'  // 4번째 인자로 path 전달
       )
     } else {
-      // 동의 안한 사람 → 기존 /consent 팝업 열기 (기존 함수 그대로 사용)
-      connectToSSDM(
-        user?.email?.split('@')[0] || 'unknown',
-        process.env.NEXT_PUBLIC_MALL_ID || 'mall001',
-        (result) => {
-          setConsentResult({
-            isActive: result.agreed,
-            consentType: result.consentType,
-            jwt: result.jwt,
-            timestamp: new Date().toISOString()
-          })
-          setShowPreview(false)
-        }
-        // error 콜백 제거 - connectToSSDM 함수에서 자동으로 alert 처리
-      )
+      // 연결하기 버튼 → consentType 확인
+      if (consentStatus?.consentType === 'always') {
+        // 항상 허용 + 로그인 안됨 → /info-preview 요청
+        connectToSSDM(
+          user?.email?.split('@')[0] || 'unknown',
+          process.env.NEXT_PUBLIC_MALL_ID || 'mall001',
+          (result) => {
+            if (result.agreed) {
+              setConsentResult({
+                isActive: result.agreed,
+                consentType: result.consentType,
+                jwt: result.jwt,
+                timestamp: new Date().toISOString()
+              })
+              setShowPreview(false)
+            } else {
+              // 거부한 경우 - Alert 표시
+              alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
+              setShowPreview(false)
+            }
+          },
+          '/info-preview'  // 항상 허용 + 로그인 안됨은 /info-preview 요청
+        )
+      } else {
+        // 일회성 동의 또는 동의 안됨 → /consent 요청
+        connectToSSDM(
+          user?.email?.split('@')[0] || 'unknown',
+          process.env.NEXT_PUBLIC_MALL_ID || 'mall001',
+          (result) => {
+            setConsentResult({
+              isActive: result.agreed,
+              consentType: result.consentType,
+              jwt: result.jwt,
+              timestamp: new Date().toISOString()
+            })
+            setShowPreview(false)
+          }
+          // '/consent' (기본값)
+        )
+      }
     }
   }
 
