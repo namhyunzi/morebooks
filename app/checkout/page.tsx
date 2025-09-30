@@ -33,12 +33,13 @@ interface CartItemWithBook extends CartItem {
 function CheckoutContent() {
   const { 
     user, 
+    loading,
     updateCartCount
   } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [cartItems, setCartItems] = useState<CartItemWithBook[]>([])
-  const [loading, setLoading] = useState(true)
+  const [pageLoading, setPageLoading] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState("bank-transfer")
   const [selectedCard, setSelectedCard] = useState("")
   const [selectedBank, setSelectedBank] = useState("")
@@ -85,6 +86,8 @@ function CheckoutContent() {
   })
 
   useEffect(() => {
+    if (loading) return  // 로딩 중이면 대기
+    
     if (!user) {
       router.push('/login')
       return
@@ -175,7 +178,7 @@ function CheckoutContent() {
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [user, router])
+  }, [user, loading, router])
 
   const checkAppReturnData = (searchParams: URLSearchParams) => {
     // URL 파라미터에서 앱 데이터 확인
@@ -228,7 +231,7 @@ function CheckoutContent() {
       console.error('장바구니 로딩 에러:', error)
       toast.error('장바구니를 불러오는데 실패했습니다.')
     } finally {
-      setLoading(false)
+      setPageLoading(false)
     }
   }
 
@@ -629,7 +632,7 @@ function CheckoutContent() {
   }
 
 
-  if (loading) {
+  if (pageLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
