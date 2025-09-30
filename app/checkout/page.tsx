@@ -405,15 +405,23 @@ function CheckoutContent() {
 
 
   const handleOrder = async () => {
+    console.log('=== handleOrder 시작 ===')
+    console.log('사용자 정보:', { uid: user?.uid, email: user?.email })
+    console.log('입력 방식:', { useManualInput, useSSDM })
+    console.log('SSDM 연결 상태:', { ssdmConnected, showPreview })
+    
     if (!user) {
+      console.log('사용자가 없음 - 함수 종료')
       return
     }
 
     // delegateJwt 저장용 변수 (함수 시작 시 초기화)
     let savedDelegateJwt: string | null = null
+    console.log('delegateJwt 변수 초기화:', savedDelegateJwt)
 
     // 개인정보 입력 방식에 따른 검증
     if (useManualInput) {
+      console.log('직접 입력 방식 검증 시작')
       // 직접 입력 방식일 때 상세한 폼 검증
       const errors = []
       
@@ -466,6 +474,12 @@ function CheckoutContent() {
       
       // 택배사용 JWT 발급 요청
       try {
+        console.log('=== SSDM JWT 발급 요청 시작 ===')
+        console.log('요청 파라미터:', { 
+          shopId: user.email?.split('@')[0] || 'unknown',
+          mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+        })
+        
         // 필요한 데이터만 전달 (JWT 생성은 서버에서)
         const response = await fetch('/api/ssdm/issue-partner-jwt', {
           method: 'POST',
@@ -478,54 +492,38 @@ function CheckoutContent() {
           })
         })
         
+        console.log('=== API 응답 확인 ===')
+        console.log('응답 상태:', response.status, response.ok)
+        console.log('응답 헤더 전체:', Object.fromEntries(response.headers.entries()))
+        console.log('Authorization 헤더:', response.headers.get('Authorization'))
+        console.log('Content-Type 헤더:', response.headers.get('Content-Type'))
+        
         // HTTP 상태 코드 확인
         if (!response.ok) {
+          console.log('=== API 응답 실패 ===')
           const errorData = await response.json()
+          console.log('에러 데이터:', errorData)
           alert(errorData.error || '개인정보 보호 시스템 연결에 문제가 발생했습니다.')
           window.location.reload()  // 페이지 새로고침 추가
           return
         }
         
-        // 성공 시에만 헤더에서 JWT 받기
-        console.log('응답 상태:', response.status, response.ok)
-        console.log('Authorization 헤더:', response.headers.get('Authorization'))
-        const jwtFromHeader = response.headers.get('Authorization')?.replace('Bearer ', '')
-        console.log('추출된 JWT:', jwtFromHeader)
-        if (jwtFromHeader) {
-          try {
-            // 우리 서버 API로 JWT 검증 요청
-            const verifyResponse = await fetch('/api/verify-partner-jwt', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ jwt: jwtFromHeader })
-            })
-
-            if (!verifyResponse.ok) {
-              const errorData = await verifyResponse.json()
-              console.error('JWT 검증 API 에러:', errorData)
-              alert(`JWT 검증에 실패했습니다: ${errorData.error}`)
-              return
-            }
-
-            const { delegateJwt } = await verifyResponse.json()
+        // 서버에서 이미 검증된 delegateJwt를 받아서 바로 사용
+        console.log('=== 서버 응답에서 delegateJwt 추출 ===')
+        const result = await response.json()
+        console.log('서버 응답 데이터:', result)
+        
+        const { delegateJwt } = result
+        console.log('서버에서 받은 delegateJwt:', delegateJwt ? delegateJwt.substring(0, 50) + '...' : 'null')
                         
-            if (delegateJwt) {
-              // 택배사용 JWT만 저장
-              setSSMDJWT(delegateJwt)
-              savedDelegateJwt = delegateJwt  // 변수에도 저장
-              console.log('택배사용 JWT 발급 완료:', delegateJwt.substring(0, 50) + '...')
-            } else {
-              alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
-              return
-            }
-          } catch (error) {
-            console.error('JWT 검증 실패:', error)
-            alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
-            return
-          }
+        if (delegateJwt) {
+          // 택배사용 JWT만 저장
+          setSSMDJWT(delegateJwt)
+          savedDelegateJwt = delegateJwt  // 변수에도 저장
+          console.log('택배사용 JWT 발급 완료:', delegateJwt.substring(0, 50) + '...')
+          console.log('savedDelegateJwt 설정됨:', savedDelegateJwt ? 'true' : 'false')
         } else {
+          console.log('delegateJwt가 없음 - alert 발생')
           alert('개인정보 보호 시스템 연결에 문제가 발생했습니다. 연결정보를 확인해주세요.')
           return
         }
@@ -541,6 +539,10 @@ function CheckoutContent() {
     }
 
     try {
+      console.log('=== 주문 처리 시작 ===')
+      console.log('savedDelegateJwt 상태:', savedDelegateJwt ? '있음' : '없음')
+      console.log('useSSDM 상태:', useSSDM)
+      
       setProcessing(true)
 
       const orderData = {
@@ -569,7 +571,9 @@ function CheckoutContent() {
       if (useSSDM && savedDelegateJwt) {
         // 저장된 delegateJwt 사용
         jwtToStore = savedDelegateJwt
-        console.log('설정된 JWT 사용:', savedDelegateJwt)
+        console.log('설정된 JWT 사용:', savedDelegateJwt.substring(0, 50) + '...')
+      } else {
+        console.log('JWT 사용 안함 - useSSDM:', useSSDM, 'savedDelegateJwt:', savedDelegateJwt ? '있음' : '없음')
       }
 
       // 주문 처리 (JWT 정보 포함)

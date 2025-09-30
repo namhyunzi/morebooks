@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateJWT } from '@/lib/jwt-utils'
+import { verifyPartnerJWT } from '@/lib/jwt-verification'
 import jwt from 'jsonwebtoken'
 
 export async function POST(request: NextRequest) {
@@ -89,6 +90,17 @@ export async function POST(request: NextRequest) {
     const { delegateJwt } = decoded
     console.log('추출된 delegateJwt 길이:', delegateJwt.length)
     console.log('추출된 delegateJwt 시작:', delegateJwt.substring(0, 50) + '...')
+    
+    // JWT 검증 로직 추가
+    console.log('JWT 검증 시작...')
+    const verifyResult = await verifyPartnerJWT(jwtToken)
+    
+    if (!verifyResult.valid) {
+      console.error('JWT 검증 실패:', verifyResult.error)
+      throw new Error(`JWT 검증에 실패했습니다: ${verifyResult.error}`)
+    }
+    
+    console.log('JWT 검증 성공, delegateJwt 반환')
     
     return NextResponse.json({ 
       delegateJwt 
