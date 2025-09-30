@@ -56,7 +56,6 @@ function CheckoutContent() {
   const [showPreview, setShowPreview] = useState(false)
   const [consentStatus, setConsentStatus] = useState<any>(null)
   const [consentResult, setConsentResult] = useState<any>(null)
-  const [consentRejected, setConsentRejected] = useState(false)
   
   // 배송 메모 옵션 매핑
   const deliveryMemoOptions: { [key: string]: string } = {
@@ -93,82 +92,38 @@ function CheckoutContent() {
 
     loadCartItems()
     
-    // 2. useEffect 수정 - 페이지 진입 시 동의 상태 확인
-    const checkConsentStatus = async () => {
-      if (!user) return
-      
-      try {
-        const shopId = user.email?.split('@')[0] || 'unknown'
-        const mallId = process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-        
-        // JWT 생성
-        const jwtResult = await generateSSDMJWT({ shopId, mallId })
-        const jwtToken = jwtResult.jwt
-
-        // SSDM 측 API로 직접 호출
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${jwtToken}`,
-            'Content-Type': 'application/json'
-          }
-        })
-        
-        console.log('API 응답 상태:', response.status, response.statusText)
-        console.log('API 응답 헤더:', response.headers)
-        
-        const result = await response.json()
-        console.log('API 응답 데이터:', result)
-        
-        if (result.status === 'connected') {
-          // 항상 허용 + 유효함
-          setShowPreview(true)   // 미리보기 버튼
-          setConsentStatus(result)
-          setSSMDConnected(true)  // SSDM 연결 상태 설정
-          sessionStorage.setItem('consentStatus', JSON.stringify(result))
-          sessionStorage.setItem('ssdm_connected', 'true')
-        } else {
-          // need_connect (모든 다른 경우)
-          setShowPreview(false)  // 연결하기 버튼
-          setSSMDConnected(false)  // SSDM 연결 상태 해제
-          sessionStorage.removeItem('consentStatus')
-          sessionStorage.removeItem('ssdm_connected')
-        }
-      } catch (error) {
-        setShowPreview(false)
-        setSSMDConnected(false)  // SSDM 연결 상태 해제
+    // 직접 입력폼 계정정보에서 가져와서 기본정보 표시
+    if (user) {
+      if (user.displayName) {
+        setCustomerInfo(prev => ({ ...prev, name: user.displayName! }))
+      } else if (user.email) {
+        const emailParts = user.email.split('@')
+        setCustomerInfo(prev => ({ 
+          ...prev, 
+          name: emailParts[0],
+          emailId: emailParts[0],
+          emailDomain: emailParts[1] || "naver.com"
+        }))
       }
     }
-
+    
+    // 페이지 진입 시 동의 상태 확인
     checkConsentStatus()
     
-    // sessionStorage에서 저장된 동의 상태 복원
-    const savedConsentStatus = sessionStorage.getItem('consentStatus')
+    // 새로고침시 nStorage에서 저장된 동의 상태 복원
+    const savedConsentStatus = sessionStorage.getItem('consentStatus') // api에서 항상 허용인 경우
+    const savedAgreed = sessionStorage.getItem('ssdm_agreed') // 팝업에서 허용한 경우
+    
     if (savedConsentStatus) {
+      // API 응답 복원 (항상 허용 사용자)
       try {
         const parsedStatus = JSON.parse(savedConsentStatus)
         setConsentStatus(parsedStatus)
         
-        
         // 저장된 상태에 따라 showPreview 설정
         if (parsedStatus.status === 'connected') {
-          // 항상 허용 만료 확인
-          if (parsedStatus.consentType === 'always' && parsedStatus.expiresAt) {
-            const expiresAt = new Date(parsedStatus.expiresAt)
-            const now = new Date()
-            if (now > expiresAt) {
-              setShowPreview(false)  // 연결하기 버튼
-              return
-            }
-          }
-          
-          // 연결 해제 확인
-          if (parsedStatus.isActive === false) {
-            setShowPreview(false)  // 연결하기 버튼
-            return
-          }
-          
-          // 정상 동의 상태
+          // SSDM에서 이미 isActive와 만료 여부를 확인해서 제공하므로
+          // 클라이언트에서는 connected 상태만 확인
           setShowPreview(true)   // 미리보기 버튼
           setSSMDConnected(true)  // SSDM 연결 상태 설정
         } else {
@@ -179,38 +134,26 @@ function CheckoutContent() {
         console.error('저장된 동의 상태 파싱 오류:', error)
         sessionStorage.removeItem('consentStatus')
       }
+    } else if (savedAgreed === 'true') {
+      // 팝업 동의 복원 (팝업에서 동의한 사용자)
+      setSSMDConnected(true) // SSDM 연결 상태 설정
+      setUseSSDM(true) //  SSDM 방식 선택
+      setUseManualInput(false) // 직접 입력 비활성화
+      setShowPreview(true) // 미리보기 버튼
     }
     
-    // 앱에서 돌아온 데이터 확인
-    if (searchParams) {
-      checkAppReturnData(searchParams)
-      // SSDM에서 돌아온 데이터 확인
-      checkSSMDReturnData(searchParams)
-    }
-
     // 팝업에서 오는 메시지 리스너 등록
     const handleMessage = async (event: MessageEvent) => {
     console.log("메세지 받음", event.data);
       // SSDM 동의 결과 처리
       if (event.data && event.data.type === 'consent_result') {
         // 동의 처리 - JWT 디코딩 없이 바로 처리
-        setConsentRejected(false)  // 거부 상태 초기화
         sessionStorage.setItem('ssdm_agreed', 'true')
         setSSMDConnected(true)
         setUseSSDM(true)
         setUseManualInput(false)
         setShowPreview(true)
         toast.success('개인정보 보호 시스템 연결 완료!')
-        
-        // 팝업 닫기
-        if (ssdmPopup && !ssdmPopup.closed) {
-          ssdmPopup.close()
-          setSSMDPopup(null)
-        }
-      } else if (event.data && event.data.type === 'consent_rejected') {
-        // 거부 처리 
-        setConsentRejected(true)
-        toast.error('개인정보 제공을 거부하셨습니다.')
         
         // 팝업 닫기
         if (ssdmPopup && !ssdmPopup.closed) {
@@ -232,7 +175,7 @@ function CheckoutContent() {
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [user, router, searchParams])
+  }, [user, router])
 
   const checkAppReturnData = (searchParams: URLSearchParams) => {
     // URL 파라미터에서 앱 데이터 확인
@@ -265,6 +208,31 @@ function CheckoutContent() {
     }
   }
 
+  // 장바구니에 해당 하는 상품 데이터 로딩
+  const loadCartItems = async () => {
+    if (!user) return
+
+    try {
+      const items = await getCartItems(user.uid)
+      const itemsWithBooks: CartItemWithBook[] = []
+      
+      for (const item of items) {
+        const book = getBookById(item.bookId)
+        if (book) {
+          itemsWithBooks.push({ ...item, book })
+        }
+      }
+      
+      setCartItems(itemsWithBooks)
+    } catch (error) {
+      console.error('장바구니 로딩 에러:', error)
+      toast.error('장바구니를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // SSDM 동의 상태 확인 함수
   const checkConsentStatus = async () => {
     if (!user) return
     
@@ -285,17 +253,23 @@ function CheckoutContent() {
         }
       })
       
+      console.log('API 응답 상태:', response.status, response.statusText)
+      console.log('API 응답 헤더:', response.headers)
+      
       const result = await response.json()
+      console.log('API 응답 데이터:', result)
       
       if (result.status === 'connected') {
         // 항상 허용 + 유효함
-        setShowPreview(true)
+        setShowPreview(true)   // 미리보기 버튼
         setConsentStatus(result)
         setSSMDConnected(true)  // SSDM 연결 상태 설정
+        sessionStorage.setItem('consentStatus', JSON.stringify(result))
       } else {
         // need_connect (모든 다른 경우)
-        setShowPreview(false)
+        setShowPreview(false)  // 연결하기 버튼
         setSSMDConnected(false)  // SSDM 연결 상태 해제
+        sessionStorage.removeItem('consentStatus')
       }
     } catch (error) {
       setShowPreview(false)
@@ -303,74 +277,28 @@ function CheckoutContent() {
     }
   }
 
-  const checkSSMDReturnData = (searchParams: URLSearchParams) => {
-    handleSSDMResult(
-      searchParams,
-        (response: SSDMResponse) => {
-        // 성공 시 처리
-        if (response.jwt && response.uid) {
-          setSSMDJWT(response.jwt)
-          setSSMDUID(response.uid)
-          setSSMDConnected(true)
-          
-          // SSDM 연결 시 자동으로 SSDM 방식 선택
-          setUseSSDM(true)
-          setUseManualInput(false)
-          
-          toast.success(`개인정보 보호 시스템 연결 완료! (${response.expiresIn}초간 유효)`)
-          
-          // JWT 검증
-          validateSSDMJWT(response.jwt).then(isValid => {
-            if (isValid) {
-              console.log('JWT 검증 성공')
-            } else {
-              console.warn('JWT 검증 실패')
-            }
-          })
+  // 화이트리스트 방식으로 주문 가능 여부 확인
+  const canProceedWithOrder = () => {
+    // 1. API 응답으로 항상 허용 사용자
+    const savedConsentStatus = sessionStorage.getItem('consentStatus')
+    if (savedConsentStatus) {
+      try {
+        const parsedStatus = JSON.parse(savedConsentStatus)
+        if (parsedStatus.status === 'connected') {
+          return true
         }
-      },
-      (error: string) => {
-        // 실패 시 처리
-        toast.error(getSSDMErrorMessage(error))
-        console.error('SSDM 연결 실패:', error)
+      } catch (error) {
+        console.error('consentStatus 파싱 오류:', error)
       }
-    )
-  }
-
-  const loadCartItems = async () => {
-    if (!user) return
-
-    try {
-      const items = await getCartItems(user.uid)
-      const itemsWithBooks: CartItemWithBook[] = []
-      
-      for (const item of items) {
-        const book = getBookById(item.bookId)
-        if (book) {
-          itemsWithBooks.push({ ...item, book })
-        }
-      }
-      
-      setCartItems(itemsWithBooks)
-      
-      // 사용자 정보 자동 입력
-      if (user.displayName) {
-        setCustomerInfo(prev => ({ ...prev, name: user.displayName! }))
-      } else if (user.email) {
-        const emailParts = user.email.split('@')
-        setCustomerInfo(prev => ({ 
-          ...prev, 
-          name: emailParts[0],
-          emailId: emailParts[0],
-          emailDomain: emailParts[1] || "naver.com"
-        }))
-      }
-    } catch (error) {
-      console.error('장바구니 로딩 에러:', error)
-      toast.error('장바구니를 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
     }
+    
+    // 2. 팝업에서 동의한 사용자
+    const savedAgreed = sessionStorage.getItem('ssdm_agreed')
+    if (savedAgreed === 'true') {
+      return true
+    }
+    
+    return false
   }
   
   const totalAmount = cartItems.reduce((sum, item) => sum + item.book.discountPrice * item.quantity, 0)
@@ -434,7 +362,7 @@ function CheckoutContent() {
     await handleSSMDConnect()
   }
 
-  // 3. 기존 "개인정보 연결하기" 버튼 클릭 시 로직 수정
+  // "개인정보 연결하기" 버튼 클릭 
   const handleConnectPersonalInfo = () => {
     if (showPreview) {
       // 동의한 사람 또는 항상 허용인 사람 → 미리보기 팝업 열기
@@ -459,7 +387,7 @@ function CheckoutContent() {
         '/info-preview'  // 4번째 인자로 path 전달
       )
     } else {
-      // 동의 안한 사람 → 기존 /consent 팝업 열기 (기존 함수 그대로 사용)
+      // 동의 안한 사람 → 기존 /consent 팝업 열기 
       connectToSSDM(
         user?.email?.split('@')[0] || 'unknown',
         process.env.NEXT_PUBLIC_MALL_ID || 'mall001',
@@ -526,26 +454,9 @@ function CheckoutContent() {
         return
       }
     } else if (useSSDM) {
-      // SSDM 방식일 때는 연결 상태 및 동의 상태 검증
-      if (!ssdmConnected) {
-        alert('개인정보 보호 시스템 연결이 필요합니다.\n\n"개인정보 보호 시스템 사용"을 체크하고 연결해주세요.')
-        return
-      }
-      
-      // 거부 상태 확인
-      if (consentRejected) {
-        alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
-        return
-      }
-      
-      // 연결 해제 확인
-      if (consentStatus?.isActive === false) {
-        alert('개인정보 보호 시스템 연결이 해제되었습니다. 다시 연결해주세요.')
-        
-        // 연결 해제 시 정리
-        sessionStorage.removeItem('ssdm_connected')
-        sessionStorage.removeItem('consentStatus')
-        
+      // SSDM 방식일 때는 화이트리스트 방식으로 동의 상태 검증
+      if (!canProceedWithOrder()) {
+        alert('개인정보 보호 시스템 동의가 필요합니다.\n\n"개인정보 보호 시스템 사용"을 체크하고 연결해주세요.')
         return
       }
       
@@ -555,7 +466,7 @@ function CheckoutContent() {
         return
       }
       
-      // 모든 경우에서 /api/issue-partner-jwt 호출하여 택배사용 JWT 발급
+      // 택배사용 JWT 발급 요청
       try {
         // JWT 생성
         const authJWT = await generateSSDMJWT({ 
@@ -603,12 +514,7 @@ function CheckoutContent() {
             }
 
             const { delegateJwt } = await verifyResponse.json()
-            
-            console.log('--- 디버깅 시작 ---')
-            console.log('받은 delegateJwt:', delegateJwt)
-            console.log('delegateJwt 존재 여부 (boolean):', !!delegateJwt)
-            console.log('--- 디버깅 종료 ---')
-            
+                        
             if (delegateJwt) {
               // 택배사용 JWT만 저장
               setSSMDJWT(delegateJwt)
@@ -656,10 +562,9 @@ function CheckoutContent() {
         status: 'paid' as const,
         paymentMethod: 'bank_transfer' as const,
         paymentStatus: 'completed' as const,
-        // SSDM에서 개인정보 중개하므로 shippingAddress 제거
-        shippingFee: 0, // 배송비 무료
-        finalAmount: totalAmount, // 배송비 무료이므로 상품금액과 동일
-        deliveryMemo: deliveryMemoOptions[deliveryMemo] // 배송 메모 추가 
+        shippingFee: 0, 
+        finalAmount: totalAmount, 
+        deliveryMemo: deliveryMemoOptions[deliveryMemo] 
       }
 
       // SSDM JWT 정보 준비 - 변수로 delegateJwt 저장
@@ -710,7 +615,6 @@ function CheckoutContent() {
         // 주문 완료 후 sessionStorage 정리
         sessionStorage.removeItem('ssdm_agreed')
         sessionStorage.removeItem('consentStatus')
-        sessionStorage.removeItem('ssdm_connected')
         
         router.push(`/payment-success?orderId=${result.orderId}`)
       } else {
