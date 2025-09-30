@@ -56,7 +56,6 @@ function CheckoutContent() {
   const [showPreview, setShowPreview] = useState(false)
   const [consentStatus, setConsentStatus] = useState<any>(null)
   const [consentResult, setConsentResult] = useState<any>(null)
-  const [consentRejected, setConsentRejected] = useState(false)
   
   // 배송 메모 옵션 매핑
   const deliveryMemoOptions: { [key: string]: string } = {
@@ -126,13 +125,11 @@ function CheckoutContent() {
           setConsentStatus(result)
           setSSMDConnected(true)  // SSDM 연결 상태 설정
           sessionStorage.setItem('consentStatus', JSON.stringify(result))
-          sessionStorage.setItem('ssdm_connected', 'true')
         } else {
           // need_connect (모든 다른 경우)
           setShowPreview(false)  // 연결하기 버튼
           setSSMDConnected(false)  // SSDM 연결 상태 해제
           sessionStorage.removeItem('consentStatus')
-          sessionStorage.removeItem('ssdm_connected')
         }
       } catch (error) {
         setShowPreview(false)
@@ -194,23 +191,12 @@ function CheckoutContent() {
       // SSDM 동의 결과 처리
       if (event.data && event.data.type === 'consent_result') {
         // 동의 처리 - JWT 디코딩 없이 바로 처리
-        setConsentRejected(false)  // 거부 상태 초기화
         sessionStorage.setItem('ssdm_agreed', 'true')
         setSSMDConnected(true)
         setUseSSDM(true)
         setUseManualInput(false)
         setShowPreview(true)
         toast.success('개인정보 보호 시스템 연결 완료!')
-        
-        // 팝업 닫기
-        if (ssdmPopup && !ssdmPopup.closed) {
-          ssdmPopup.close()
-          setSSMDPopup(null)
-        }
-      } else if (event.data && event.data.type === 'consent_rejected') {
-        // 거부 처리 
-        setConsentRejected(true)
-        toast.error('개인정보 제공을 거부하셨습니다.')
         
         // 팝업 닫기
         if (ssdmPopup && !ssdmPopup.closed) {
@@ -231,6 +217,8 @@ function CheckoutContent() {
     // 컴포넌트 언마운트 시 리스너 제거
     return () => {
       window.removeEventListener('message', handleMessage)
+      // 페이지 나갈 때 ssdm_agreed만 정리
+      sessionStorage.removeItem('ssdm_agreed')
     }
   }, [user, router, searchParams])
 
@@ -532,9 +520,18 @@ function CheckoutContent() {
         return
       }
       
-      // 거부 상태 확인
-      if (consentRejected) {
-        alert('개인정보 제공에 동의하지 않으셨습니다. 주문을 진행할 수 없습니다.')
+      // 주문하기 가능 여부 확인 (화이트리스트 방식)
+      const canOrder = sessionStorage.getItem('ssdm_agreed') || 
+                       (() => {
+                         const consentData = sessionStorage.getItem('consentStatus')
+                         if (consentData) {
+                           const parsed = JSON.parse(consentData)
+                           return parsed.status === 'connected'
+                         }
+                         return false
+                       })()
+      if (!canOrder) {
+        alert('개인정보 보호 시스템 연결이 필요합니다.')
         return
       }
       
@@ -543,7 +540,6 @@ function CheckoutContent() {
         alert('개인정보 보호 시스템 연결이 해제되었습니다. 다시 연결해주세요.')
         
         // 연결 해제 시 정리
-        sessionStorage.removeItem('ssdm_connected')
         sessionStorage.removeItem('consentStatus')
         
         return
@@ -710,7 +706,6 @@ function CheckoutContent() {
         // 주문 완료 후 sessionStorage 정리
         sessionStorage.removeItem('ssdm_agreed')
         sessionStorage.removeItem('consentStatus')
-        sessionStorage.removeItem('ssdm_connected')
         
         router.push(`/payment-success?orderId=${result.orderId}`)
       } else {
