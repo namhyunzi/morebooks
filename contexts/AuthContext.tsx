@@ -20,7 +20,6 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import { PRIVACY_CONFIG } from '@/lib/privacy-config'
 
 interface AuthContextType {
   user: User | null
@@ -53,7 +52,6 @@ interface AuthContextType {
   
   // 개인정보 시스템 연동 함수들
   requestPrivacyUIDAndJWT: () => Promise<{ uid: string, jwt: string }>
-  requestUserInfo: (requiredFields: string[]) => Promise<any>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -367,8 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 이메일에서 shopId 추출 (예: user@example.com → user)
       const emailParts = user!.email?.split('@') || []
       const shopId = emailParts[0] || user!.uid
-      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
-      const mallId = PRIVACY_CONFIG.mallId
+      const mallId = process.env.MALL_ID
       
       if (!mallId) {
         throw new Error('Mall ID가 설정되지 않았습니다.')
@@ -393,29 +390,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  // 새로운 함수: 개인정보 요청
-  const requestUserInfo = async (requiredFields: string[]) => {
-    try {
-      if (!privacyJWT) {
-        throw new Error('JWT 토큰이 없습니다.')
-      }
-      
-      const { PrivacySystemClient } = await import('@/lib/privacy-config')
-      const client = new PrivacySystemClient()
-      const result = await client.requestUserInfo(privacyJWT, requiredFields)
-      
-      // SSDM에서 제공하는 추가 정보 활용
-      console.log('세션 타입:', result.sessionType)
-      console.log('허용된 필드:', result.allowedFields)
-      console.log('만료 시간:', result.expiresAt)
-      console.log('기능:', result.capabilities)
-      
-      return result // { viewerUrl, sessionId, allowedFields, ... }
-    } catch (error) {
-      console.error('개인정보 요청 실패:', error)
-      throw error
-    }
-  }
 
 
 
@@ -442,8 +416,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateCartCount,
     
     // 개인정보 시스템 연동 함수들
-    requestPrivacyUIDAndJWT,
-    requestUserInfo
+    requestPrivacyUIDAndJWT
   }
 
   return (

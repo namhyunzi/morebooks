@@ -326,8 +326,7 @@ function CheckoutContent() {
       // 이메일에서 shopId 추출 (예: user@example.com → user)
       const emailParts = user.email?.split('@') || []
       const shopId = emailParts[0] || user.uid
-      const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
-      const mallId = PRIVACY_CONFIG.mallId
+      const mallId = process.env.MALL_ID
       
       if (!mallId) {
         throw new Error('Mall ID가 설정되지 않았습니다.')

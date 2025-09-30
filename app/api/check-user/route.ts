@@ -158,12 +158,11 @@ async function requestUidAndJwt(email: string) {
     // 2. 이메일에서 shopId 추출 (예: user@example.com → user)
     const emailParts = userRecord.email?.split('@') || []
     const shopId = emailParts[0] || userRecord.uid
-    const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
-    const mallId = PRIVACY_CONFIG.mallId
+    const mallId = process.env.MALL_ID
 
     // 3. JWT 생성 (서버사이드에서 API 키로 생성)
     const { generateJWT } = await import('@/lib/jwt-utils')
-    const apiKey = PRIVACY_CONFIG.apiKey
+    const apiKey = process.env.PRIVACY_SYSTEM_API_KEY
     
     const jwt = generateJWT({ shopId, mallId }, apiKey)
     
@@ -206,12 +205,11 @@ async function validateUserConsent(email: string, requiredFields: string[]) {
     // 2. 이메일에서 shopId 추출 (예: user@example.com → user)
     const emailParts = userRecord.email?.split('@') || []
     const shopId = emailParts[0] || userRecord.uid
-    const { PRIVACY_CONFIG } = await import('@/lib/privacy-config')
-    const mallId = PRIVACY_CONFIG.mallId
+    const mallId = process.env.MALL_ID
 
     // 3. JWT 생성 (동의 확인용)
     const { generateJWT } = await import('@/lib/jwt-utils')
-    const apiKey = PRIVACY_CONFIG.apiKey
+    const apiKey = process.env.PRIVACY_SYSTEM_API_KEY
     const jwt = generateJWT({ shopId, mallId }, apiKey)
     
     console.log('JWT 생성 완료 (동의 확인용):', { shopId, mallId })
