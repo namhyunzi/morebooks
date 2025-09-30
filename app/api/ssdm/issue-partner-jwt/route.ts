@@ -1,0 +1,47 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { generateSSDMJWT } from '@/lib/ssdm-api'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { shopId, mallId } = await request.json()
+    
+    if (!shopId || !mallId) {
+      return NextResponse.json(
+        { error: 'shopId와 mallId가 필요합니다.' },
+        { status: 400 }
+      )
+    }
+    
+    // 서버에서 JWT 생성
+    const authJWT = await generateSSDMJWT({ shopId, mallId })
+    
+    // 서버에서 외부 SSDM API 호출
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/issue-partner-jwt`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authJWT.jwt}`
+      }
+    })
+    
+    console.log('SSDM 파트너 JWT API 응답 상태:', response.status, response.statusText)
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error('SSDM 파트너 JWT API 에러 응답:', errorData)
+      throw new Error(`SSDM 파트너 JWT API 호출 실패: ${errorData.error || response.status}`)
+    }
+    
+    const result = await response.json()
+    console.log('SSDM 파트너 JWT API 응답 데이터:', result)
+    
+    return NextResponse.json(result)
+    
+  } catch (error) {
+    console.error('SSDM 파트너 JWT 발급 실패:', error)
+    return NextResponse.json(
+      { error: '파트너 JWT 발급에 실패했습니다.' },
+      { status: 500 }
+    )
+  }
+}

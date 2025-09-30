@@ -242,18 +242,14 @@ function CheckoutContent() {
     try {
       const shopId = user.email?.split('@')[0] || 'unknown'
       const mallId = process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-      
-      // JWT 생성
-      const jwtResult = await generateSSDMJWT({ shopId, mallId })
-      const jwtToken = jwtResult.jwt
 
-      // SSDM 측 API로 직접 호출
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/check-consent-status`, {
+      // 필요한 데이터만 전달 (JWT 생성은 서버에서)
+      const response = await fetch('/api/ssdm/check-consent-status', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${jwtToken}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ shopId, mallId })
       })
       
       console.log('API 응답 상태:', response.status, response.statusText)
@@ -470,18 +466,16 @@ function CheckoutContent() {
       
       // 택배사용 JWT 발급 요청
       try {
-        // JWT 생성
-        const authJWT = await generateSSDMJWT({ 
-          shopId: user.email?.split('@')[0] || 'unknown',
-          mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
-        })
-        
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/issue-partner-jwt`, {
+        // 필요한 데이터만 전달 (JWT 생성은 서버에서)
+        const response = await fetch('/api/ssdm/issue-partner-jwt', {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authJWT.jwt}`
-          }
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            shopId: user.email?.split('@')[0] || 'unknown',
+            mallId: process.env.NEXT_PUBLIC_MALL_ID || 'mall001'
+          })
         })
         
         // HTTP 상태 코드 확인
