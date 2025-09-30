@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateJWT } from '@/lib/jwt-utils'
+import jwt from 'jsonwebtoken'
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,7 +62,37 @@ export async function POST(request: NextRequest) {
     const result = await response.json()
     console.log('SSDM 파트너 JWT API 응답 데이터:', result)
     
-    return NextResponse.json(result)
+    // 헤더에서 JWT 토큰 추출
+    const authorizationHeader = response.headers.get('authorization')
+    console.log('Authorization 헤더:', authorizationHeader)
+    
+    if (!authorizationHeader) {
+      console.error('Authorization 헤더가 없음')
+      throw new Error('SSDM API에서 Authorization 헤더를 받지 못했습니다.')
+    }
+    
+    // Bearer 토큰 추출
+    const jwtToken = authorizationHeader.replace('Bearer ', '')
+    console.log('추출된 JWT 토큰 길이:', jwtToken.length)
+    console.log('추출된 JWT 토큰 시작:', jwtToken.substring(0, 50) + '...')
+    
+    // JWT 토큰 디코딩
+    const decoded = jwt.decode(jwtToken) as any
+    console.log('디코딩된 JWT 페이로드:', decoded)
+    
+    if (!decoded || !decoded.delegateJwt) {
+      console.error('JWT에서 delegateJwt를 찾을 수 없음:', decoded)
+      throw new Error('JWT에서 delegateJwt를 찾을 수 없습니다.')
+    }
+    
+    // delegateJwt 추출
+    const { delegateJwt } = decoded
+    console.log('추출된 delegateJwt 길이:', delegateJwt.length)
+    console.log('추출된 delegateJwt 시작:', delegateJwt.substring(0, 50) + '...')
+    
+    return NextResponse.json({ 
+      delegateJwt 
+    })
     
   } catch (error) {
     console.error('SSDM 파트너 JWT 발급 실패:', error)
