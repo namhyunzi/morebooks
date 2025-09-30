@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateSSDMJWT } from '@/lib/ssdm-api'
+import { generateJWT } from '@/lib/jwt-utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,15 +12,29 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // 서버에서 JWT 생성
-    const authJWT = await generateSSDMJWT({ shopId, mallId })
+    // 서버에서 직접 JWT 생성
+    const apiKey = process.env.PRIVACY_SYSTEM_API_KEY
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'PRIVACY_SYSTEM_API_KEY environment variable is not set' },
+        { status: 500 }
+      )
+    }
+    
+    const authJWT = generateJWT({ 
+      shopId, 
+      mallId,
+      timestamp: new Date().toISOString()
+    }, apiKey, {
+      expiresIn: '15m'
+    })
     
     // 서버에서 외부 SSDM API 호출
     const response = await fetch(`${process.env.NEXT_PUBLIC_SSDM_URL}/api/issue-partner-jwt`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authJWT.jwt}`
+        'Authorization': `Bearer ${authJWT}`
       }
     })
     
