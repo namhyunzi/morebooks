@@ -19,7 +19,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { 
   connectToSSDM, 
   handleSSDMResult, 
-  validateSSDMJWT, 
   sendJWTToDeliveryService, 
   getSSDMErrorMessage,
   generateSSDMJWT,
